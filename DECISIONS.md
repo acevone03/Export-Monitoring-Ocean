@@ -338,7 +338,6 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 
 ## Still open after the MVP
 
-- **The six questions about NNR's sheet** (end of this file): defaults applied, not yet confirmed.
 - **Live test of AI intake** with a real `ANTHROPIC_API_KEY` (only mocked so far).
 - **Telegram/SMS/Viber** channels are a stub (O5). **Mailbox reading** is not built (O6).
 - **Production hardening** before go-live: HTTPS + `COOKIE_SECURE=true`, `ENABLE_DEV_TOOLS=false`, SMTP,
@@ -372,26 +371,27 @@ real data are **not** in the repository; tests use invented rows under the real 
    sheet (`src/lib/pod-codes.ts`, e.g. TOKYO→TYO, PORT KLANG→PKL, LONG BEACH→LAX), else the UN/LOCODE's
    last 3 letters. CS can overwrite it on the form. An unknown city must be typed.
 3. **The HBL is the main reference** on the board and in exports (first column, sticky). The Job No.
-   (`EX-O-YYMM-####`) is kept for the internal timeline and reports but moved to the end. *(Question 2.)*
+   (`EX-O-YYMM-####`) is kept for the internal timeline and reports but moved to the end. *(Confirmed.)*
 4. **Arrastre cut-off is entered**, like FSI and pre-advise, from the shipping line's advice; the arrastre
    deadline is that time (rule: `arrastreCutoffAt` + 0h, editable in Rules). It is skipped when the shipper
    pays, and listed as missing until entered when NNR pays.
-5. **Export declaration "c/o"**: who files it (`NNR` or `SHIPPER`) plus an optional broker. `C/O NNR (AAI)`
-   is read as NNR filing via broker **AAI**. *(Question 3.)*
+5. **Export declaration "c/o"**: who files it (`NNR` or `SHIPPER`) plus an optional forwarder.
+   `C/O NNR (AAI)` = NNR files it through the forwarder **AAI** (`declarationForwarder`). *(Confirmed.)*
 6. **Carrier column = shipping line or co-loader** (the sheet mixes both); one text field.
-7. **Column V ("date sent the export documents", 2nd column) = sent to the carrier.** The first is "to
-   customer". *(Question 1.)* Recorded as a new step (`exportDocsToCarrierAt`), shown on the board, no deadline.
+7. **Column V (second "date sent the export documents" column) = sent to NNR's overseas office**;
+   the first is "to customer". *(Confirmed.)* It is its own step on the shipment page (date only, no
+   deadline, revertible) and fills `exportDocsToOverseasAt`.
 8. **"PART OF 7002"** in the HBL cell = split shipment. The row keeps its own HBL and links to the main
-   one (`partOfHblNo`), shown on both shipment pages. *(Question 4.)*
+   one (`partOfHblNo`), shown on both shipment pages. *(Confirmed.)*
 9. **"DIRECT BL"** rows get no NNR HBL (the line issues the BL); the text is kept in remarks. They are
    recognised on re-import by shipper + destination + pick-up + cargo.
-10. **HBLs written `MNL…` (without NNR)** are kept as written. *(Question 6.)*
+10. **HBLs written `MNL…` (without NNR)** are kept as written. *(Confirmed.)*
 11. **Board, raw Excel sheet and import share one column list** (`src/lib/nnr-sheet.ts`) with the sheet's 3
     header rows; app-only columns (Job No., status, CS, CS email, …) follow after a blank column, so an
     export re-imports cleanly.
 12. **Dates without a year** (`04-Apr`): rows are in booking order, so each date takes the year nearest the
     previous row's. The first year is guessed so no date lands more than 120 days ahead, and can be set on
-    the import page. *(Question 5.)* `TBA`, `N/A`, `-` are blank; `15-16 MAY` takes the first day;
+    the import page. *(Confirmed.)* `TBA`, `N/A`, `-` are blank; `15-16 MAY` takes the first day;
     `11 OCT @ 1200H` gives the time.
 13. **History cut-off** (default 30 days ago): older rows import as **Closed** history. No alerts and
     no on-time scoring, because the sheet doesn't record when FSI or pre-advise were done, so every old row
@@ -404,12 +404,11 @@ real data are **not** in the repository; tests use invented rows under the real 
     dates), start year 2025,
     next HBL after 9903. Re-importing the same file imports 0.
 
-### Open questions (defaults applied, please confirm)
+### Answers from NNR (17-Oct-2026)
 
-1. Is column V "date sent to **carrier**"? (default: yes)
-2. Keep the internal Job No., with the HBL as the main reference? (default: yes)
-3. Is "(AAI)" in "C/O NNR (AAI)" the customs broker? (default: yes)
-4. Does "PART OF 7002" mean this HBL belongs to shipment 7002? (default: yes, linked)
-5. Is the sheet always in booking order, so the year can be inferred? (default: yes; the year can be set)
-6. Should old `MNL…` HBLs (without "NNR") be renamed? (default: no, kept as written)
-
+1. Column V = docs sent to the **overseas office**.
+2. Keep the Job No.; the HBL is the main reference: yes.
+3. "(AAI)" = the **forwarder** NNR files the declaration through.
+4. "PART OF 7002" = belongs to shipment 7002: yes.
+5. The sheet is in booking order: yes.
+6. Old `MNL…` HBLs stay as written: yes.

@@ -14,7 +14,7 @@ export type CellValue = string | number | Date | null;
 export type SheetKey =
   | "hbl" | "booking" | "shipper" | "destination" | "etd" | "atd" | "eta" | "ata"
   | "fcl40" | "fcl20" | "lcl" | "reqPickup" | "actualPickup" | "fsiCutoff" | "preadviseCutoff" | "arrastreCutoff"
-  | "declShipper" | "declNnr" | "bocUpload" | "arrastrePaid" | "docsSent" | "docsToCarrier" | "carrier" | "remarks";
+  | "declShipper" | "declNnr" | "bocUpload" | "arrastrePaid" | "docsSent" | "docsToOverseas" | "carrier" | "remarks";
 
 // [top header, middle header, bottom header] exactly as laid out in the original sheet.
 // (The original's bottom row places "SHIPPING LINE / CO-LOADER" two columns early, under the
@@ -42,7 +42,7 @@ export const SHEET_COLUMNS: Array<{ key: SheetKey; header: [string, string, stri
   { key: "arrastrePaid", header: ["DATE ARRASTE PAID", "", ""], width: 14 },
   // The original's second "date sent" column has no label; [ASSUMPTION] customer / carrier.
   { key: "docsSent", header: ["DATE SENT THE EXPORT DOCUMENTS", "", "TO CUSTOMER"], width: 14 },
-  { key: "docsToCarrier", header: ["", "", "TO CARRIER"], width: 14 },
+  { key: "docsToOverseas", header: ["", "", "TO OVERSEAS OFFICE"], width: 14 },
   { key: "carrier", header: ["CARRIER", "", "SHIPPING LINE / CO-LOADER"], width: 16 },
   { key: "remarks", header: ["REMARKS", "", ""], width: 30 },
 ];
@@ -70,7 +70,7 @@ function declarationCell(s: Shipment, by: "SHIPPER" | "NNR"): CellValue {
   if (s.declarationBy !== by) return "N/A";
   const d = filed(s);
   if (d) return d;
-  return by === "NNR" ? `C/O NNR${s.declarationBroker ? ` (${s.declarationBroker})` : ""}` : "C/O SHIPPER";
+  return by === "NNR" ? `C/O NNR${s.declarationForwarder ? ` (${s.declarationForwarder})` : ""}` : "C/O SHIPPER";
 }
 
 export const SHEET_VALUE: Record<SheetKey, (s: SheetShipment) => CellValue> = {
@@ -95,7 +95,7 @@ export const SHEET_VALUE: Record<SheetKey, (s: SheetShipment) => CellValue> = {
   bocUpload: (s) => s.bocUploadAt,
   arrastrePaid: (s) => (s.arrastreResponsibility === "NNR" ? s.arrastrePaidAt : "N/A"),
   docsSent: (s) => s.exportDocsSentAt,
-  docsToCarrier: (s) => s.exportDocsToCarrierAt,
+  docsToOverseas: (s) => s.exportDocsToOverseasAt,
   carrier: (s) => s.carrierName,
   remarks: (s) => [s.status === "CANCELLED" ? "CANCELLED BOOKING" : "", s.carrierRemarks ?? ""].filter(Boolean).join("; ") || null,
 };

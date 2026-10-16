@@ -19,6 +19,7 @@ export const MilestoneFormSchema = z.discriminatedUnion("kind", [
     recipient: str.min(3, "Enter who the docs were sent to").max(300),
     subject: str.min(1, "Enter the email subject").max(300),
   }),
+  z.object({ kind: z.literal("DOCS_TO_OVERSEAS"), at: optionalTime }),
   z.object({ kind: z.literal("DEPARTED"), at: optionalTime, eta: optionalTime }),
   z.object({ kind: z.literal("ARRIVED"), at: optionalTime }),
   z.object({ kind: z.literal("CLOSED") }),

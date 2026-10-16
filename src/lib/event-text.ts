@@ -9,7 +9,7 @@ const FIELD_LABEL: Record<string, string> = {
   etdMnl: "ETD MNL", eta: "ETA", arrastreResponsibility: "Arrastre", carrierName: "Carrier",
   carrierBookingRef: "Booking no.", carrierRemarks: "Remarks", assignedCsId: "Assigned CS",
   arrastreCutoffAt: "Arrastre cut-off", podCode: "HBL destination code", declarationBy: "Declaration c/o",
-  declarationBroker: "Declaration broker", partOfHblNo: "Part of HBL",
+  declarationForwarder: "Declaration via forwarder", partOfHblNo: "Part of HBL",
 };
 
 const when = (iso: unknown) => (typeof iso === "string" && /^\d{4}-\d{2}-\d{2}T/.test(iso) ? formatDateTime(new Date(iso)) : String(iso ?? "—"));
@@ -35,7 +35,7 @@ function parse(value: string | null): any {
 
 const REVERT_LABEL: Record<string, string> = {
   PICKED_UP: "pick-up", FSI_SUBMITTED: "FSI submitted", PREADVISE_SENT: "pre-advise sent", BOC_UPLOADED: "BOC upload",
-  ARRASTRE_PAID: "arrastre payment", DOCS_SENT: "export docs sent", DEPARTED: "departure", ARRIVED: "arrival",
+  ARRASTRE_PAID: "arrastre payment", DOCS_SENT: "export docs sent", DOCS_TO_OVERSEAS: "docs sent to overseas office", DEPARTED: "departure", ARRIVED: "arrival",
   CLOSED: "close", CANCELLED: "cancellation",
 };
 
@@ -52,6 +52,7 @@ export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string
     case "BOC_UPLOADED": return `Uploaded to BOC portal at ${when(v)}`;
     case "ARRASTRE_PAID": return typeof v === "object" && v ? `Arrastre paid at ${when(v.at)}${v.proof ? ` (proof: ${v.proof})` : ""}` : "Arrastre paid";
     case "DOCS_SENT": return typeof v === "object" && v ? `Export docs sent to ${v.to}: "${v.subject}"` : "Export docs sent";
+    case "DOCS_TO_OVERSEAS": return `Export docs sent to overseas office at ${when(v)}`;
     case "DEPARTED": return typeof v === "object" && v ? `Departed MNL (ATD ${when(v.atd)}${v.eta ? `, ETA ${when(v.eta)}` : ""})` : "Departed";
     case "ARRIVED": return `Arrived (ATA ${when(v)})`;
     case "CLOSED": return "Shipment closed";

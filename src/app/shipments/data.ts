@@ -38,7 +38,7 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     arrastreCutoffAt: toManilaInput(s.arrastreCutoffAt),
     podCode: s.podCode ?? "",
     declarationBy: s.declarationBy,
-    declarationBroker: s.declarationBroker ?? "",
+    declarationForwarder: s.declarationForwarder ?? "",
     partOfHblNo: s.partOfHblNo ?? "",
   };
 }

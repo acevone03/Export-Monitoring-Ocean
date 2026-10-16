@@ -131,7 +131,7 @@ export default async function ShipmentPage({
             <Row k="ETD MNL" v={formatDateTime(s.etdMnl)} />
             <Row k="ETA" v={formatDateTime(s.eta)} />
             <Row k="Arrastre by" v={s.arrastreResponsibility === "NNR" ? "NNR" : "Shipper"} />
-            <Row k="Declaration c/o" v={`${s.declarationBy === "NNR" ? "NNR" : "Shipper"}${s.declarationBroker ? ` (${s.declarationBroker})` : ""}`} />
+            <Row k="Declaration c/o" v={`${s.declarationBy === "NNR" ? "NNR" : "Shipper"}${s.declarationForwarder ? ` (${s.declarationForwarder})` : ""}`} />
             <Row k="HBL destination code" v={s.podCode} mono />
             {s.partOfHblNo && (
               <>
@@ -141,7 +141,6 @@ export default async function ShipmentPage({
                 </dd>
               </>
             )}
-            {s.exportDocsToCarrierAt && <Row k="Docs sent to carrier" v={formatDateTime(s.exportDocsToCarrierAt)} />}
             <Row k="Assigned CS" v={s.assignedCs.name} />
             <dt className="text-slate-500">Source</dt>
             <dd>
@@ -218,7 +217,10 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="8. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD" revert={rv("DEPARTED")}>
+          <Step label="8. Docs sent to overseas office" due={null} done={s.exportDocsToOverseasAt} now={now} keepOpen revert={rv("DOCS_TO_OVERSEAS")}>
+            {open && <TimedAction s={s} kind="DOCS_TO_OVERSEAS" button="Mark sent" />}
+          </Step>
+          <Step label="9. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD" revert={rv("DEPARTED")}>
             {open && !s.atdMnl && (
               <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
                 <Hidden s={s} kind="DEPARTED" />
@@ -228,7 +230,7 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="9. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl} revert={rv("ARRIVED")}>
+          <Step label="10. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl} revert={rv("ARRIVED")}>
             {open && s.atdMnl && <TimedAction s={s} kind="ARRIVED" button="Mark arrived" whenLabel="ATA" />}
           </Step>
 
@@ -405,6 +407,7 @@ function TimedAction({ s, kind, button, behalf, whenLabel }: { s: Shipment; kind
   const done =
     (kind === "PICKED_UP" && s.actualPickupAt) || (kind === "FSI_SUBMITTED" && s.fsiSubmittedAt) ||
     (kind === "PREADVISE_SENT" && s.preadviseSentAt) || (kind === "BOC_UPLOADED" && s.bocUploadAt) ||
+    (kind === "DOCS_TO_OVERSEAS" && s.exportDocsToOverseasAt) ||
     (kind === "ARRIVED" && s.ata);
   if (done) return null;
   return (

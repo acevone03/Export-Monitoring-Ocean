@@ -12,7 +12,7 @@ export const PROCESS_MERMAID = `flowchart TD
   S8["8 · Uploaded to BOC portal<br/><i>BOC_UPLOADED</i>"]
   Q9{"Arrastre paid<br/>by NNR?"}
   S9["9 · Arrastre paid<br/>proof of payment attached<br/><i>ARRASTRE_PAID</i>"]
-  S10["10 · Export docs sent<br/>to customer / carrier<br/><i>DOCS_SENT</i>"]
+  S10["10 · Export docs sent<br/>to customer / overseas office<br/><i>DOCS_SENT</i>"]
   S11["11 · Departed<br/>ATD MNL<br/><i>DEPARTED</i>"]
   S12["12 · Arrived<br/>ATA, or ETA passed<br/><i>ARRIVED</i>"]
   END(["Closed<br/><i>CLOSED</i>"])

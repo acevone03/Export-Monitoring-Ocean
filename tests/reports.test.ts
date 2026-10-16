@@ -31,7 +31,7 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
     preadviseCutoffAt: t(80), preadviseSentAt: null, bocDeadlineAt: t(48), bocUploadAt: null,
     arrastreDeadlineAt: t(96), arrastreCutoffAt: t(96), arrastrePaidAt: null, exportDocsSentAt: null,
     etdMnl: t(120), atdMnl: null, eta: null, ata: null, createdAt: t(-24),
-    declarationBy: "NNR", declarationBroker: null, podCode: "LAX", partOfHblNo: null, exportDocsToCarrierAt: null, importedAsHistory: false,
+    declarationBy: "NNR", declarationForwarder: null, podCode: "LAX", partOfHblNo: null, exportDocsToOverseasAt: null, importedAsHistory: false,
     shipper: { name: shipperName }, assignedCs: { name: csName },
     ...rest,
   } as ExportShipment;

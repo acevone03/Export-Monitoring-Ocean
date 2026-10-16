@@ -87,7 +87,7 @@ const EDITABLE: Array<keyof ShipmentInput> = [
   "shipperId", "consigneeName", "destinationPort", "pod", "cargoType", "containerPlan", "lclQty", "lclUnit",
   "requestedPickupAt", "fsiCutoffAt", "preadviseCutoffAt", "etdMnl", "eta", "arrastreResponsibility",
   "carrierName", "carrierBookingRef", "carrierRemarks", "assignedCsId",
-  "arrastreCutoffAt", "podCode", "declarationBy", "declarationBroker", "partOfHblNo",
+  "arrastreCutoffAt", "podCode", "declarationBy", "declarationForwarder", "partOfHblNo",
 ];
 
 const comparable = (v: unknown) =>
@@ -160,6 +160,7 @@ export type MilestoneInput =
   | { kind: "BOC_UPLOADED"; at: Date }
   | { kind: "ARRASTRE_PAID"; at: Date; attachmentId: string }
   | { kind: "DOCS_SENT"; at: Date; recipient: string; subject: string }
+  | { kind: "DOCS_TO_OVERSEAS"; at: Date }
   | { kind: "DEPARTED"; at: Date; eta: Date | null }
   | { kind: "ARRIVED"; at: Date }
   | { kind: "CLOSED" }
@@ -223,6 +224,9 @@ async function planMilestone(
         type: EVENT.DOCS_SENT,
         value: JSON.stringify({ at: m.at.toISOString(), to: m.recipient, subject: m.subject }),
       };
+    case "DOCS_TO_OVERSEAS":
+      alreadyDone("Docs sent to overseas office", s.exportDocsToOverseasAt);
+      return { patch: { exportDocsToOverseasAt: m.at }, type: EVENT.DOCS_TO_OVERSEAS, value: m.at.toISOString() };
     case "DEPARTED": {
       alreadyDone("Departure (ATD)", s.atdMnl);
       const eta = m.eta ?? s.eta;
@@ -278,6 +282,7 @@ export const REVERTIBLE = {
   // The proof file stays attached to the shipment for the record; only the link to it is cleared.
   ARRASTRE_PAID: { label: "Arrastre payment", field: "arrastrePaidAt", clear: { arrastrePaidAt: null, arrastreProofId: null } },
   DOCS_SENT: { label: "Export docs sent", field: "exportDocsSentAt", clear: { exportDocsSentAt: null, exportDocsRecipient: null, exportDocsSubject: null } },
+  DOCS_TO_OVERSEAS: { label: "Docs sent to overseas office", field: "exportDocsToOverseasAt", clear: { exportDocsToOverseasAt: null } },
   DEPARTED: { label: "Departure (ATD)", field: "atdMnl", clear: { atdMnl: null } },
   ARRIVED: { label: "Arrival (ATA)", field: "ata", clear: { ata: null } },
   CLOSED: { label: "Close", field: "closedAt", clear: { closedAt: null } },

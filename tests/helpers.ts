@@ -35,7 +35,7 @@ export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId
     arrastreCutoffAt: null,
     podCode: "LAX",
     declarationBy: "NNR",
-    declarationBroker: null,
+    declarationForwarder: null,
     partOfHblNo: null,
     ...o,
   };

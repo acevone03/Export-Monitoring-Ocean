@@ -49,7 +49,7 @@ function declaration(by: "SHIPPER" | "NNR") {
   return (s: BoardRow) => {
     if (s.declarationBy !== by) return <span className="text-slate-400">N/A</span>;
     if (s.exportDeclarationStatus !== "PENDING") return <span className="text-green-800" title={s.exportDeclarationStatus}>{day(s.exportDeclarationUpdatedAt)} {s.exportDeclarationStatus}</span>;
-    return `C/O ${by}${by === "NNR" && s.declarationBroker ? ` (${s.declarationBroker})` : ""}`;
+    return `C/O ${by}${by === "NNR" && s.declarationForwarder ? ` (${s.declarationForwarder})` : ""}`;
   };
 }
 
@@ -75,7 +75,7 @@ const SHEET_CELLS: Record<SheetKey, Column["cell"]> = {
   bocUpload: doneOrDue("bocUploadAt", "BOC_UPLOAD"),
   arrastrePaid: (s, c) => (s.arrastreResponsibility === "NNR" ? doneOrDue("arrastrePaidAt")(s, c) : <span className="text-slate-400">N/A</span>),
   docsSent: doneOrDue("exportDocsSentAt"),
-  docsToCarrier: doneOrDue("exportDocsToCarrierAt"),
+  docsToOverseas: doneOrDue("exportDocsToOverseasAt"),
   carrier: (s) => s.carrierName,
   remarks: (s) => s.carrierRemarks,
 };
@@ -85,7 +85,7 @@ const SHORT: Record<SheetKey, string> = {
   eta: "ETA POD", ata: "ATA POD", fcl40: "FCL 40FT", fcl20: "FCL 20FT", lcl: "LCL qty", reqPickup: "Requested pick-up",
   actualPickup: "Actual pick-up", fsiCutoff: "Cut-off FSI", preadviseCutoff: "Cut-off pre-advise", arrastreCutoff: "Cut-off arrastre",
   declShipper: "Decl. c/o shipper", declNnr: "Decl. c/o NNR", bocUpload: "BOC portal upload", arrastrePaid: "Arrastre paid",
-  docsSent: "Docs sent (customer)", docsToCarrier: "Docs sent (carrier)", carrier: "Shipping line / co-loader", remarks: "Remarks",
+  docsSent: "Docs sent (customer)", docsToOverseas: "Docs sent (overseas office)", carrier: "Shipping line / co-loader", remarks: "Remarks",
 };
 
 const WIDE: Partial<Record<SheetKey, string>> = { shipper: "min-w-44", destination: "min-w-28", remarks: "min-w-48" };

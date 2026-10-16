@@ -10,7 +10,7 @@ import { NNR_HBL_PARTS_RE } from "../numbering";
 
 export const DATE_KEYS = [
   "requestedPickup", "actualPickup", "fsiCutoff", "fsiSubmitted", "preadviseCutoff", "preadviseSent", "arrastreCutoff",
-  "bocUploaded", "arrastrePaid", "docsSent", "docsToCarrier", "etd", "atd", "eta", "ata",
+  "bocUploaded", "arrastrePaid", "docsSent", "docsToOverseas", "etd", "atd", "eta", "ata",
 ] as const;
 export type DateKey = (typeof DATE_KEYS)[number];
 
@@ -36,7 +36,7 @@ export type ParsedRow = {
   declarationStatus: "PENDING" | "FILED" | "ASSESSED" | "RELEASED";
   declarationAt: Date | null;
   declarationBy: "NNR" | "SHIPPER";
-  declarationBroker: string | null;
+  declarationForwarder: string | null;
   arrastreBy: "NNR" | "SHIPPER" | null; // null: the shipper's default
   cancelled: boolean;
   closed: boolean;
@@ -72,7 +72,7 @@ function splitHbl(raw: string): { hblNo: string | null; partOf: string | null } 
   return { hblNo: s.replace(/\s+/g, ""), partOf: null };
 }
 
-const broker = (s: string) => /\(([^)]+)\)/.exec(s)?.[1]?.trim() ?? (/-\s*([A-Z]{2,})\s*$/.exec(s.toUpperCase())?.[1] ?? null);
+const forwarder = (s: string) => /\(([^)]+)\)/.exec(s)?.[1]?.trim() ?? (/-\s*([A-Z]{2,})\s*$/.exec(s.toUpperCase())?.[1] ?? null);
 
 function cargoFrom(fcl: string, lcl: string, hblLetter: string | null): { cargo: ParsedCargo | null; error: string | null; note: string | null } {
   const clean = (t: string) => (/^[-–]+$/.test(t.trim()) ? "" : t.trim());
@@ -131,7 +131,7 @@ export function readNnrRow(values: unknown[], row: number, ref: Date, extras: Re
   date("bocUploaded", "bocUpload", anchor);
   date("arrastrePaid", "arrastrePaid", anchor);
   date("docsSent", "docsSent", anchor);
-  date("docsToCarrier", "docsToCarrier", anchor);
+  date("docsToOverseas", "docsToOverseas", anchor);
   date("etd", "etd", anchor);
   date("atd", "atd", anchor);
   date("eta", "eta", dates.etd ?? anchor);
@@ -140,13 +140,13 @@ export function readNnrRow(values: unknown[], row: number, ref: Date, extras: Re
   // Export declaration: the filing date sits under whoever handled it.
   let declarationBy: "NNR" | "SHIPPER" = "NNR";
   let declarationAt: Date | null = null;
-  let declarationBroker: string | null = null;
+  let declarationForwarder: string | null = null;
   for (const [k, by] of [["declShipper", "SHIPPER"], ["declNnr", "NNR"]] as const) {
     const t = text(k);
     if (!t || isNotApplicable(t)) continue;
     declarationBy = by;
     if (/C\/?O/i.test(t)) {
-      if (by === "NNR") declarationBroker = broker(t);
+      if (by === "NNR") declarationForwarder = forwarder(t);
       continue;
     }
     try {
@@ -173,7 +173,7 @@ export function readNnrRow(values: unknown[], row: number, ref: Date, extras: Re
     cargo, carrier: text("carrier"), bookingRef: text("booking"), remarks, csText: extra("CS EMAIL") || extra("ASSIGNED CS"),
     dates,
     declarationStatus: declarationAt ? "FILED" : "PENDING",
-    declarationAt, declarationBy, declarationBroker,
+    declarationAt, declarationBy, declarationForwarder,
     arrastreBy: arrastreNA ? "SHIPPER" : dates.arrastreCutoff || dates.arrastrePaid ? "NNR" : null,
     cancelled: /CANCEL/i.test(remarks) || /^cancel/i.test(extra("STATUS")),
     closed: /^closed/i.test(extra("STATUS")),
@@ -220,7 +220,7 @@ export function readTemplateRow(values: unknown[], row: number, map: Partial<Rec
     cargo, carrier: text("carrier"), bookingRef: text("bookingRef"), remarks: text("remarks"), csText: text("cs"),
     dates,
     declarationStatus: (["PENDING", "FILED", "ASSESSED", "RELEASED"].includes(decl) ? decl : "PENDING") as ParsedRow["declarationStatus"],
-    declarationAt: null, declarationBy: "NNR", declarationBroker: null,
+    declarationAt: null, declarationBy: "NNR", declarationForwarder: null,
     arrastreBy: arrastreBy ?? null,
     cancelled: status.startsWith("cancel"),
     closed: status.startsWith("close"),

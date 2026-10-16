@@ -49,11 +49,11 @@ Two layouts are recognised automatically:
 | O | PRE ADVISE | Date & time |
 | P | ARRASTRE | Date & time; `N/A` = shipper pays arrastre |
 | Q | EXPORT DECLARTION / C/O SHIPPER | Filled (not `N/A`) = declaration c/o shipper; a date = filed on that date. |
-| R | C/O NNR | A date = filed on that date. `C/O NNR (AAI)` = pending, filed by broker AAI. |
+| R | C/O NNR | A date = filed on that date. `C/O NNR (AAI)` = pending, filed by NNR through forwarder AAI. |
 | S | DATE UPLOAD TO BOC PORTAL | Date; `c/o shipper` is kept in remarks |
 | T | DATE ARRASTE PAID | Date; `N/A` here or in the arrastre cut-off = shipper pays |
 | U | DATE SENT THE EXPORT DOCUMENTS / TO CUSTOMER | Date sent to customer |
-| V | TO CARRIER | Date sent to carrier **[ASSUMPTION]** |
+| V | TO OVERSEAS OFFICE | Date sent to the overseas office |
 | W | CARRIER / SHIPPING LINE / CO-LOADER | Shipping line or co-loader name |
 | X | REMARKS | Kept. `CANCELLED` in remarks = cancelled shipment. |
 

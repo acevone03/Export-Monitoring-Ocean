@@ -22,7 +22,7 @@ const row = (c: Record<number, string>) => Array.from({ length: 25 }, (_, i) => 
 
 // Columns: 0 HBL, 1 booking, 2 shipper, 3 destination, 4 ETD, 5 ATD, 6 ETA, 7 ATA, 8 40FT, 9 20FT, 10 LCL,
 // 11 requested pick-up, 12 actual, 13 FSI, 14 pre-advise, 15 arrastre cut-off, 16 decl c/o shipper,
-// 17 decl c/o NNR, 18 BOC, 19 arrastre paid, 20 docs sent, 21 docs (2nd), 22 carrier, 23 remarks
+// 17 decl c/o NNR, 18 BOC, 19 arrastre paid, 20 docs sent, 21 docs to overseas office, 22 carrier, 23 remarks
 const SHEET = [
   HEADER,
   row({ 0: "NNRMNLTYOL7001", 2: "ACME TRADING", 3: "TOKYO", 10: "3 PALLETS", 11: "04-Apr", 22: "ECU" }), // r4 Apr 2025, history
@@ -35,7 +35,7 @@ const SHEET = [
     0: "NNRMNLLCHF7006", 1: "MNLM1234567", 2: "GAMMA PH", 3: "LAEM CHABANG", 4: "25-Oct", 8: "", 9: "2X20", 11: "10-Oct", 12: "10-Oct",
     13: "11 C0CT @ 1200H", 14: "12 OCT @ 2300H", 15: "N/A", 16: "N/A", 17: "13-Oct", 19: "N/A", 22: "OOCL",
   }),
-  row({ 0: "NNRMNLHKGF7007", 2: "DELTA INC", 3: "HONG KONG", 9: "1X20", 11: "14-Oct", 17: "C/O NNR (AAI)", 18: "c/o shipper", 22: "ONE" }), // r11 broker
+  row({ 0: "NNRMNLHKGF7007", 2: "DELTA INC", 3: "HONG KONG", 9: "1X20", 11: "14-Oct", 17: "C/O NNR (AAI)", 18: "c/o shipper", 22: "ONE" }), // r11 forwarder
   row({ 0: "NNRMNLOSAF9990", 2: "", 3: "OSAKA", 9: "1X20", 11: "15-Oct" }), // r12 error (no shipper) with the highest HBL
 ].join("\n");
 
@@ -112,9 +112,9 @@ describe("importing NNR's monitoring sheet", () => {
     expect(active.etdMnl?.toISOString()).toBe(fromManila(2026, 10, 25).toISOString());
     expect(active.exportDeclarationUpdatedAt?.toISOString()).toBe(fromManila(2026, 10, 13).toISOString());
 
-    const broker = await byHbl("NNRMNLHKGF7007");
-    expect(broker).toMatchObject({ declarationBy: "NNR", declarationBroker: "AAI", exportDeclarationStatus: "PENDING" });
-    expect(broker.carrierRemarks).toMatch(/BOC upload: c\/o shipper/);
+    const fwd = await byHbl("NNRMNLHKGF7007");
+    expect(fwd).toMatchObject({ declarationBy: "NNR", declarationForwarder: "AAI", exportDeclarationStatus: "PENDING" });
+    expect(fwd.carrierRemarks).toMatch(/BOC upload: c\/o shipper/);
 
     // The highest HBL in the file (even on a row with errors) moves the counter: next is 9991.
     expect(await nextHblNo(prisma, "TYO", "FCL")).toBe("NNRMNLTYOF9991");

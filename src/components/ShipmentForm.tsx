@@ -33,7 +33,7 @@ export type ShipmentFormValues = {
   arrastreCutoffAt: string;
   podCode: string;
   declarationBy: "NNR" | "SHIPPER";
-  declarationBroker: string;
+  declarationForwarder: string;
   partOfHblNo: string;
 };
 
@@ -263,8 +263,8 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             <option value="SHIPPER">Shipper</option>
           </select>
         </Field>
-        <Field label="Declaration broker (optional)" error={err.declarationBroker}>
-          <input className="input" name="declarationBroker" defaultValue={v("declarationBroker")} placeholder="e.g. AAI" />
+        <Field label="Declaration via forwarder (optional)" error={err.declarationForwarder}>
+          <input className="input" name="declarationForwarder" defaultValue={v("declarationForwarder")} placeholder="e.g. AAI" />
         </Field>
         <Field label="Assigned CS" error={err.assignedCsId}>
           <select className="input" name="assignedCsId" defaultValue={v("assignedCsId")} required>

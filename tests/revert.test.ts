@@ -32,6 +32,16 @@ describe("revertMilestone", () => {
     await expect(revertMilestone(prisma, s.id, "FSI_SUBMITTED", "x", sup, { now: due })).rejects.toThrow(/not recorded/);
   });
 
+  it("records and reverts docs sent to the overseas office", async () => {
+    const s = await createShipment(prisma, base(), cs, { now: at(-DAY) });
+    await recordMilestone(prisma, s.id, { kind: "DOCS_TO_OVERSEAS", at: at(-HOUR) }, cs, { now: at(-HOUR), source: "WEB" });
+    expect(describeEvent(await lastEvent(s.id))).toBe("Export docs sent to overseas office at 03-Nov-2026 07:00");
+    await expect(recordMilestone(prisma, s.id, { kind: "DOCS_TO_OVERSEAS", at: due }, cs, { now: due, source: "WEB" })).rejects.toThrow(/already recorded/);
+    const after = await revertMilestone(prisma, s.id, "DOCS_TO_OVERSEAS", "Wrong shipment", sup, { now: due });
+    expect(after.exportDocsToOverseasAt).toBeNull();
+    expect(describeEvent(await lastEvent(s.id))).toBe("Reverted: docs sent to overseas office (was 03-Nov-2026 07:00)");
+  });
+
   it("clears the step, logs old value and reason, recomputes status, and reopens the deadline's alerts", async () => {
     const s = await createShipment(prisma, { ...base(), requestedPickupAt: due }, cs, { now: at(-DAY) });
     await runAlertTick(prisma, at(MINUTES(1)), []); // DUE alert for pick-up

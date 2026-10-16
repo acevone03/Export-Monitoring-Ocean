@@ -72,7 +72,7 @@ export const ShipmentInputSchema = z
     // HBL destination code (TYO in NNRMNLTYOF9904). Blank: worked out from the destination.
     podCode: z.string().trim().toUpperCase().max(3),
     declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
-    declarationBroker: optText(100),
+    declarationForwarder: optText(100),
     partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
   })
   .superRefine((v, ctx) => {
@@ -128,7 +128,7 @@ export const SHIPMENT_FORM_KEYS = [
   "arrastreCutoffAt",
   "podCode",
   "declarationBy",
-  "declarationBroker",
+  "declarationForwarder",
   "partOfHblNo",
 ] as const;
 

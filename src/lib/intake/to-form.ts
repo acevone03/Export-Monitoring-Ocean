@@ -100,7 +100,7 @@ export function extractionToForm(
       arrastreCutoffAt: "",
       podCode: podCodeFor(destination) ?? "",
       declarationBy: "NNR",
-      declarationBroker: "",
+      declarationForwarder: "",
       partOfHblNo: "",
     },
   };

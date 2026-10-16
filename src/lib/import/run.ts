@@ -265,7 +265,7 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
       assignedCsId: cs?.id ?? PLACEHOLDER_ID,
       podCode,
       declarationBy: p.declarationBy,
-      declarationBroker: p.declarationBroker ?? "",
+      declarationForwarder: p.declarationForwarder ?? "",
       partOfHblNo: "",
     });
     if (!form.success) for (const i of form.error.issues) errors.push(`${String(i.path[0] ?? "Row")}: ${i.message}`);
@@ -296,11 +296,11 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
         fsiCutoffAt: f.fsiCutoffAt, fsiSubmittedAt: d.fsiSubmitted ?? null,
         preadviseCutoffAt: f.preadviseCutoffAt, preadviseSentAt: d.preadviseSent ?? null,
         arrastreResponsibility: f.arrastreResponsibility, arrastreCutoffAt: f.arrastreCutoffAt,
-        declarationBy: f.declarationBy, declarationBroker: f.declarationBroker,
+        declarationBy: f.declarationBy, declarationForwarder: f.declarationForwarder,
         exportDeclarationStatus: p.declarationStatus,
         exportDeclarationUpdatedAt: p.declarationStatus === "PENDING" ? null : p.declarationAt ?? opts.now,
         bocUploadAt: d.bocUploaded ?? null, arrastrePaidAt: d.arrastrePaid ?? null,
-        exportDocsSentAt: d.docsSent ?? null, exportDocsToCarrierAt: d.docsToCarrier ?? null,
+        exportDocsSentAt: d.docsSent ?? null, exportDocsToOverseasAt: d.docsToOverseas ?? null,
         carrierName: f.carrierName, carrierBookingRef: f.carrierBookingRef, carrierRemarks: f.carrierRemarks,
         etdMnl: f.etdMnl, atdMnl: d.atd ?? null, eta: f.eta, ata: d.ata ?? null,
         cancelledAt: p.cancelled ? opts.now : null,

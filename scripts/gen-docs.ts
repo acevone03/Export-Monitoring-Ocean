@@ -45,9 +45,9 @@ const SHEET_READ: Record<SheetKey, string> = {
   fsiCutoff: "Date & time, e.g. `11 OCT @ 1200H`", preadviseCutoff: "Date & time",
   arrastreCutoff: "Date & time; `N/A` = shipper pays arrastre",
   declShipper: "Filled (not `N/A`) = declaration c/o shipper; a date = filed on that date.",
-  declNnr: "A date = filed on that date. `C/O NNR (AAI)` = pending, filed by broker AAI.",
+  declNnr: "A date = filed on that date. `C/O NNR (AAI)` = pending, filed by NNR through forwarder AAI.",
   bocUpload: "Date; `c/o shipper` is kept in remarks", arrastrePaid: "Date; `N/A` here or in the arrastre cut-off = shipper pays",
-  docsSent: "Date sent to customer", docsToCarrier: "Date sent to carrier **[ASSUMPTION]**",
+  docsSent: "Date sent to customer", docsToOverseas: "Date sent to the overseas office",
   carrier: "Shipping line or co-loader name", remarks: "Kept. `CANCELLED` in remarks = cancelled shipment.",
 };
 const sheetRows = SHEET_COLUMNS.map((c, i) => {
