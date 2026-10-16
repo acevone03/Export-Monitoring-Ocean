@@ -1,0 +1,42 @@
+import "server-only";
+import type { Shipment } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { COMMON_PORTS } from "@/lib/ports";
+import { toManilaInput } from "@/lib/time";
+import type { ShipmentFormValues } from "@/components/ShipmentForm";
+
+export async function formOptions() {
+  const [shippers, csUsers, used] = await Promise.all([
+    prisma.shipper.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, defaultArrastre: true } }),
+    prisma.user.findMany({ where: { active: true, role: { in: ["CS", "SUPERVISOR"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.shipment.findMany({ distinct: ["destinationPort"], select: { destinationPort: true, pod: true } }),
+  ]);
+  const destinations = [...new Set([...COMMON_PORTS, ...used.flatMap((u) => [u.destinationPort, u.pod])])].sort();
+  return { shippers, csUsers, destinations };
+}
+
+export function toFormValues(s: Shipment): ShipmentFormValues {
+  return {
+    shipperId: s.shipperId,
+    consigneeName: s.consigneeName ?? "",
+    destinationPort: s.destinationPort,
+    pod: s.pod,
+    cargoType: s.cargoType,
+    containerPlan: (s.containerPlan as ShipmentFormValues["containerPlan"] | null) ?? [],
+    lclQty: s.lclQty?.toString() ?? "",
+    lclUnit: s.lclUnit ?? "",
+    requestedPickupAt: toManilaInput(s.requestedPickupAt),
+    fsiCutoffAt: toManilaInput(s.fsiCutoffAt),
+    preadviseCutoffAt: toManilaInput(s.preadviseCutoffAt),
+    etdMnl: toManilaInput(s.etdMnl),
+    eta: toManilaInput(s.eta),
+    arrastreResponsibility: s.arrastreResponsibility,
+    carrierName: s.carrierName ?? "",
+    carrierBookingRef: s.carrierBookingRef ?? "",
+    carrierRemarks: s.carrierRemarks ?? "",
+    assignedCsId: s.assignedCsId,
+  };
+}
+
+export const formValuesOf = (form: FormData) =>
+  Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;

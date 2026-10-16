@@ -74,3 +74,46 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
     Resetting means deleting `prisma/dev.db` on purpose.
 15. **Simulated time (Step 4) will not affect session expiry**, so fast-forwarding the clock in a demo
     does not log people out. `src/lib/clock.ts` is the single `now()` the engine will use.
+
+## Step 2 decisions (shipment form, milestones, status machine)
+
+1. **One write path.** `src/lib/shipments.ts` is the only code that writes shipments. Each create, edit
+   or milestone validates the change, recomputes status and the cached deadlines, and appends
+   `milestone_events` in one transaction.
+2. **The edit form only changes planning fields** (shipper, ports, cargo, cut-offs, ETD/ETA, carrier,
+   arrastre, assigned CS). Milestone timestamps (pick-up done, FSI, pre-advise, BOC, arrastre, docs,
+   ATD, ATA) change only through their own buttons, so each one is a deliberate, logged act. An edit
+   writes one `FIELD_CHANGED` event listing old → new values, and nothing if nothing changed.
+3. **Milestone time:** blank means "now". A past time can be entered (e.g. pick-up happened earlier),
+   and up to 10 minutes in the future is tolerated for phone clock drift.
+4. **A milestone cannot be recorded twice**; the second attempt is rejected with the original time.
+   **[OPEN] Correcting a wrongly recorded milestone** (undo) is not built yet. Proposal: supervisor-only
+   "revert" that logs a `REVERTED` event, never deleting the original.
+5. **Steps may be confirmed out of order** (e.g. BOC upload before pre-advise). The status follows the
+   furthest step (Step 1, decision 6).
+6. **Export declaration status can move in any direction** (each change logged), because BOC can send a
+   declaration back. The status counts as `DECLARED` once it is not `PENDING`.
+7. **Arrastre payment requires a proof file** (PNG/JPG/WEBP/PDF, max 10 MB) and is only allowed when
+   arrastre = NNR. Files are stored via `FileStorage` (local disk now) and served only to logged-in
+   CS/supervisors at `/api/attachments/{id}` (no public URLs). If saving the milestone fails after the
+   upload, the file stays as an unlinked attachment (kept for audit, not deleted).
+8. **Export docs sent:** recipient defaults to the shipper's email and the subject to
+   `Export docs {Job No.} / HBL {HBL No.}`. Both are stored, as the spec requires.
+9. **Cancel** needs a reason and is only allowed before departure. **Close** is only allowed once arrived.
+   Closed and cancelled shipments are read-only. Nothing is ever deleted.
+10. **CS recording a field person's text message:** the pick-up and declaration steps have an "On behalf
+    of field" option with a note. The event source is `CS_ON_BEHALF` (spec section 9 fallback).
+11. **Validation:** FCL needs at least one container row, with each size listed once (2×40'HC + 1×40' is
+    fine). LCL needs quantity and unit. ETA must be after ETD, and ATA after ATD. Fields for the other
+    cargo type are dropped on save.
+12. **Shipper master:** CS and supervisors can add shippers at `/shippers`. Editing shippers is not built
+    yet. The form's shipper field only accepts an existing shipper (autocomplete) and fills in the
+    shipper's default arrastre until CS changes it.
+13. **"Missing mandatory data"** (`src/lib/mandatory.ts`): before departure, requested pick-up, ETD, carrier,
+    carrier booking ref, FSI cut-off and pre-advise cut-off; after departure, ETA. Nothing on
+    cancelled/closed shipments. Shown on the shipment page now and in the daily report later.
+14. **Field users cannot open shipment pages.** They update through magic links (Step 5).
+15. **Date pickers** (`<input type="datetime-local">`) show the browser's own date format (e.g. mm/dd),
+    which the app cannot control. Everything the app displays uses `DD-MMM-YYYY HH:mm`, Manila time.
+16. **HBL correction** (supervisor) rejects a number used by another shipment or retired by an earlier
+    correction, and logs the reason.

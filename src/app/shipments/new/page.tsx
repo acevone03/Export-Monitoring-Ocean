@@ -1,0 +1,32 @@
+import { requireUser } from "@/lib/auth";
+import { ShipmentForm } from "@/components/ShipmentForm";
+import { formOptions } from "../data";
+import { createShipmentAction } from "./actions";
+
+export default async function NewShipmentPage() {
+  const user = await requireUser(["CS", "SUPERVISOR"]);
+  const { shippers, csUsers, destinations } = await formOptions();
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold">New ocean export shipment</h1>
+        <p className="text-sm text-slate-600">Job No. and HBL No. are assigned automatically when you save.</p>
+      </div>
+      <ShipmentForm
+        action={createShipmentAction}
+        isNew
+        submitLabel="Create shipment"
+        shippers={shippers}
+        csUsers={csUsers}
+        destinations={destinations}
+        initial={{
+          shipperId: "", consigneeName: "", destinationPort: "", pod: "", cargoType: "FCL",
+          containerPlan: [{ size: "40HC", qty: 1 }], lclQty: "", lclUnit: "",
+          requestedPickupAt: "", fsiCutoffAt: "", preadviseCutoffAt: "", etdMnl: "", eta: "",
+          arrastreResponsibility: "NNR", carrierName: "", carrierBookingRef: "", carrierRemarks: "",
+          assignedCsId: user.role === "CS" ? user.id : "",
+        }}
+      />
+    </div>
+  );
+}

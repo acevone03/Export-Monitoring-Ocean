@@ -40,7 +40,7 @@ DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 ## Build progress (spec Section 13)
 
 - [x] 1. Schema, auth, seed data
-- [ ] 2. Shipment form + numbering + status machine + tests
+- [x] 2. Shipment form + numbering + status machine + tests
 - [ ] 3. Live board + shipment detail timeline
 - [ ] 4. Deadline engine + scheduler + notifications + simulate-time
 - [ ] 5. Field magic-link page

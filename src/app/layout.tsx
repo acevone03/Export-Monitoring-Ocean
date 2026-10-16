@@ -18,6 +18,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 NNR Export Monitor
               </Link>
               <Link href="/" className="text-slate-700 hover:text-blue-700">Board</Link>
+              {can.editShipments(user) && (
+                <>
+                  <Link href="/shipments/new" className="text-slate-700 hover:text-blue-700">New shipment</Link>
+                  <Link href="/shippers" className="text-slate-700 hover:text-blue-700">Shippers</Link>
+                </>
+              )}
               {can.manageUsers(user) && (
                 <Link href="/admin/users" className="text-slate-700 hover:text-blue-700">Users</Link>
               )}

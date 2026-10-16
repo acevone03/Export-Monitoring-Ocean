@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/time";
@@ -41,7 +42,9 @@ export default async function Home() {
           <tbody className="divide-y divide-slate-100">
             {shipments.map((s) => (
               <tr key={s.id}>
-                <td className="whitespace-nowrap px-3 py-2 font-mono">{s.jobNo}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono">
+                  <Link href={`/shipments/${s.id}`} className="text-blue-700 hover:underline">{s.jobNo}</Link>
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono">{s.hblNo}</td>
                 <td className="px-3 py-2">{s.shipper.name}</td>
                 <td className="px-3 py-2">{s.destinationPort}</td>
