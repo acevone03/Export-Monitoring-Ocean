@@ -303,3 +303,46 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 12. **Testing without a key:** unit tests inject a fake client. The end-to-end check pointed the real SDK
     at a local mock of the Messages endpoint via `ANTHROPIC_BASE_URL`. **Not yet verified against the
     live API**, which needs a real key.
+
+## Step 8 decisions (spreadsheet import, process map, docs)
+
+1. **Fixed column mapping, no mapping UI** (spec 10.4), in `src/lib/import/mapping.ts`. Each field accepts
+   several header spellings (e.g. "Booking No." for Job No., "Pickup Date" for Requested Pick-up).
+   **[ASSUMPTION]** until the real spreadsheet headers are confirmed. Adding a spelling is a one-line
+   change, then run `npm run docs`. Unknown columns are listed and ignored. Missing Shipper, Destination
+   or Cargo columns stop the import before anything is saved.
+2. **Check first, then import.** "Check only" (ticked by default) validates every row and saves nothing. The
+   real run imports each valid row in its own transaction. Invalid rows are listed with **all** their
+   problems and can be downloaded as "rows to fix" (original values + an Error column) to correct and
+   re-upload. Nothing fails silently.
+3. **Same rules as the app:** every row goes through the shipment form's validation, plus: ATA needs ATD,
+   and arrastre can't be paid by NNR when the shipper pays it. **Slash dates (10/11/2026) are rejected** as
+   ambiguous; Excel date cells and `16-Oct-2026 09:00` / `2026-10-16 09:00` are read as Manila time.
+4. **Numbers:** an HBL No. in the sheet is kept (already given to customers). A Job No. is kept when it
+   is already in `EX-O-YYMM-####` form. Otherwise a new one is issued and the old booking number is shown
+   on the timeline. Before any new number is generated, the counters are moved past every number kept
+   from the file. (A test caught the bug where a generated HBL took a number used further down the file.)
+5. **Re-import is safe:** rows whose HBL No., Job No. or old booking no. were already imported are skipped
+   and listed. Rows with none of the three cannot be recognised, so upload only the "rows to fix" file
+   after a partial import.
+6. **Shippers:** exact name match (ignoring punctuation and Inc/Corp/Co). Unknown names are created when
+   "Add shippers" is ticked. A *partial* match is refused with "did you mean …?" to avoid near-duplicate
+   shippers.
+7. **Assigned CS:** email (unique) or name. A name shared by two users is refused ("use their email"). Blank
+   means the person importing.
+8. **Status is recalculated from the dates** (only "Cancelled"/"Closed" are read from the sheet). Imported
+   arrastre payments need no proof file (old records). **Report month** for an imported shipment is the
+   earliest of requested pick-up, FSI cut-off and ETD, so history lands in the right month.
+9. **Process map:** one Mermaid definition (`src/lib/process-map.ts`) renders on `/process` (bundled mermaid,
+   no CDN) and is written to `docs/process-map.md` by `npm run docs`. A test fails if the doc and the
+   app diverge. The same applies to `docs/import.md` and the import mapping.
+
+## Still open after the MVP
+
+- **Real spreadsheet headers** (board columns, raw Excel sheet, import mapping): all three are single lists
+  marked [ASSUMPTION].
+- **Undo a wrongly recorded milestone** (Step 2, decision 4): proposed as a supervisor-only, logged revert.
+- **Live test of AI intake** with a real `ANTHROPIC_API_KEY` (only mocked so far).
+- **Telegram/SMS/Viber** channels are a stub (O5). **Mailbox reading** is not built (O6).
+- **Production hardening** before go-live: HTTPS + `COOKIE_SECURE=true`, `ENABLE_DEV_TOOLS=false`, SMTP,
+  Postgres (drop `connection_limit=1`), rate limiting on `/f/` and `/login` at the proxy, backups.

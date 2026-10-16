@@ -34,6 +34,17 @@ Set `ANTHROPIC_API_KEY` in `.env` (and optionally `ANTHROPIC_MODEL`, default `cl
 CS paste a customer email at **From email** (`/intake`); the booking is pre-filled for review and only saved when CS confirm.
 Without a key, the page shows a disabled notice and the manual form still works.
 
+### Moving over from the spreadsheet
+
+Supervisors import the old monitoring spreadsheet at **Import** (`/admin/import`): check first, then import.
+Rows with problems are listed and downloadable as "rows to fix"; re-uploading is safe.
+Accepted headers and rules: [`docs/import.md`](docs/import.md); a template: `docs/import-template.xlsx`.
+
+### Process map
+
+`/process` in the app, and [`docs/process-map.md`](docs/process-map.md) (Mermaid). Both come from
+`src/lib/process-map.ts`; run `npm run docs` after changing it.
+
 Dev tools exist only when `ENABLE_DEV_TOOLS=true`. Set it to `false` in production.
 
 ## Other commands
@@ -44,6 +55,7 @@ Dev tools exist only when `ENABLE_DEV_TOOLS=true`. Set it to `false` in producti
 | `npm run typecheck` | TypeScript check |
 | `npm run scheduler` | Background process: deadline alerts every 5 minutes, daily report email after 07:30 Manila |
 | `npm run tick` | Run one scheduler tick now and exit |
+| `npm run docs` | Regenerate `docs/process-map.md`, `docs/import.md`, `docs/import-template.xlsx` |
 | `npm run db:migrate` | Create/apply a migration after editing `prisma/schema.prisma` |
 
 ## Layout
@@ -54,8 +66,18 @@ prisma/seed.ts         demo data: 15 shipments covering every status, some overd
 src/lib/               domain logic: numbering, status, deadlines, time, auth
 src/app/               Next.js App Router pages and server actions
 tests/                 Vitest unit tests
+scripts/               scheduler process, docs generator
+docs/                  process map, import guide and template (generated)
 DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 ```
+
+## Definition of done (spec section 14)
+
+Verified end to end in a browser: a supervisor logs in, pastes a customer email, confirms the extracted
+shipment, sees the Job No. and HBL No. assigned, watches the pick-up deadline turn amber then red with
+simulate-time, receives the alert email (outbox), marks the pick-up done from the field link on a phone,
+and downloads the daily and monthly Excel reports. The AI step was run against a local mock of the
+Anthropic API (no key in the build environment); set a real `ANTHROPIC_API_KEY` to use it live.
 
 ## Build progress (spec Section 13)
 
@@ -66,4 +88,4 @@ DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 - [x] 5. Field magic-link page
 - [x] 6. Daily and monthly reports + Excel export
 - [x] 7. AI email intake
-- [ ] 8. Spreadsheet import, process-map page, docs
+- [x] 8. Spreadsheet import, process-map page, docs

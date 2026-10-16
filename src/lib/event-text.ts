@@ -49,6 +49,7 @@ export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string
     case "CLOSED": return "Shipment closed";
     case "CANCELLED": return `Cancelled: ${v}`;
     case "HBL_EDITED": return `HBL No. changed ${v.from} → ${v.to}`;
+    case "IMPORTED": return `Imported from the old spreadsheet (row ${v?.row})${v?.legacyJobNo ? `, old booking no. ${v.legacyJobNo}` : ""}`;
     case "NOTE": return v && typeof v === "object" && v.photo ? "Photo from field" : "Note";
     case "FIELD_CHANGED":
       return "Edited: " + Object.entries(v as Record<string, { from: unknown; to: unknown }>)

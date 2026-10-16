@@ -44,6 +44,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {can.viewMonthlyReport(user) && <Link href="/reports/monthly" className="text-slate-700 hover:text-blue-700">Monthly report</Link>}
               {can.editRules(user) && <Link href="/admin/rules" className="text-slate-700 hover:text-blue-700">Rules</Link>}
               {can.manageUsers(user) && <Link href="/admin/users" className="text-slate-700 hover:text-blue-700">Users</Link>}
+              {can.manageUsers(user) && <Link href="/admin/import" className="text-slate-700 hover:text-blue-700">Import</Link>}
+              <Link href="/process" className="text-slate-700 hover:text-blue-700">Process</Link>
               {dev && <Link href="/dev/simulate-time" className="text-amber-700 hover:text-amber-900">Dev: time</Link>}
               <span className="ml-auto flex items-center gap-3">
                 {staff && (
