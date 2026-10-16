@@ -1,0 +1,365 @@
+// NNR Export Monitor schema.
+// SQLite for the MVP; kept Postgres-compatible (no SQLite-only types or raw SQL).
+// All DateTime values are stored in UTC and displayed in Asia/Manila.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  CS
+  FIELD
+  SUPERVISOR
+  CUSTOMER // reserved for the post-MVP customer portal; no UI grants it yet
+}
+
+enum Mode {
+  OCEAN
+  AIR
+}
+
+enum CargoType {
+  FCL
+  LCL
+  AIR
+}
+
+enum LclUnit {
+  PALLET
+  BOX
+}
+
+enum ArrastreResponsibility {
+  NNR
+  SHIPPER
+  NA
+}
+
+enum DeclarationStatus {
+  PENDING
+  FILED
+  ASSESSED
+  RELEASED
+}
+
+enum ShipmentStatus {
+  BOOKED
+  PICKUP_SCHEDULED
+  PICKED_UP
+  FSI_DONE
+  PREADVISED
+  DECLARED
+  BOC_UPLOADED
+  ARRASTRE_PAID
+  DOCS_SENT
+  DEPARTED
+  ARRIVED
+  CLOSED
+  CANCELLED
+}
+
+enum ShipmentSource {
+  CS
+  EMAIL
+  CUSTOMER
+  IMPORT
+}
+
+enum EventSource {
+  WEB
+  EMAIL
+  FIELD_LINK
+  CS_ON_BEHALF
+  SYSTEM
+  IMPORT
+}
+
+enum DeadlineType {
+  PICKUP
+  FSI
+  PREADVISE
+  BOC_UPLOAD
+  ARRASTRE
+}
+
+enum AlertLevel {
+  REMINDER
+  DUE
+  OVERDUE
+}
+
+enum AttachmentKind {
+  ARRASTRE_PROOF
+  EXPORT_DOC
+  FIELD_PHOTO
+  OTHER
+}
+
+enum IntakeStatus {
+  PENDING_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
+// ---------- Core ----------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  phone        String?
+  viberId      String?
+  telegramId   String?
+  active       Boolean  @default(true)
+  // Only for role CUSTOMER (post-MVP): which shipper this login belongs to.
+  shipperId    String?
+  shipper      Shipper? @relation(fields: [shipperId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions          Session[]
+  assignedShipments Shipment[]       @relation("AssignedCs")
+  createdShipments  Shipment[]       @relation("CreatedBy")
+  events            MilestoneEvent[]
+  notifications     Notification[]
+  alertsAcked       Alert[]          @relation("AlertAckBy")
+  fieldLinks        FieldLink[]
+  intakes           EmailIntake[]
+}
+
+model Session {
+  id        String   @id // random token, stored hashed (sha256 hex)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Shipper {
+  id                      String                 @id @default(uuid())
+  name                    String                 @unique
+  contactPerson           String?
+  email                   String?
+  phone                   String?
+  defaultPickupAddress    String?
+  defaultArrastre         ArrastreResponsibility @default(NNR)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  shipments Shipment[]
+  users     User[]
+}
+
+model Shipment {
+  id        String @id @default(uuid())
+  jobNo     String @unique
+  mode      Mode
+  hblHawbNo String? @unique // assigned on confirmation, never reused
+
+  carrierBookingRef String?
+  mawbNo            String? // AIR only
+
+  shipperId     String
+  shipper       Shipper @relation(fields: [shipperId], references: [id])
+  consigneeName String?
+
+  destinationPort String
+  pod             String
+
+  // OCEAN FCL only: JSON array of {size: "20"|"40"|"40HC", qty: number}
+  containerPlan Json?
+  cargoType     CargoType
+  lclQty        Int?
+  lclUnit       LclUnit?
+
+  requestedPickupAt DateTime? // null = not yet scheduled (status BOOKED); flagged as missing data
+  actualPickupAt    DateTime?
+
+  fsiCutoffAt       DateTime?
+  fsiSubmittedAt    DateTime? // set by "Mark FSI submitted"
+  preadviseCutoffAt DateTime?
+  preadviseSentAt   DateTime? // set by "Mark pre-advise sent"
+
+  arrastreResponsibility     ArrastreResponsibility
+  exportDeclarationStatus    DeclarationStatus      @default(PENDING)
+  exportDeclarationUpdatedAt DateTime?
+
+  bocUploadAt      DateTime?
+  arrastrePaidAt   DateTime?
+  arrastreProofId  String?   @unique
+  arrastreProof    Attachment? @relation("ArrastreProof", fields: [arrastreProofId], references: [id])
+  exportDocsSentAt DateTime?
+  exportDocsRecipient String?
+  exportDocsSubject   String?
+
+  // Computed from deadline_rules by the engine and cached here for querying.
+  bocDeadlineAt      DateTime?
+  arrastreDeadlineAt DateTime?
+
+  carrierName    String?
+  carrierRemarks String?
+
+  etdMnl DateTime? // null allowed at DB level so intake can save; flagged as missing data
+  atdMnl DateTime?
+  eta    DateTime?
+  ata    DateTime?
+
+  status       ShipmentStatus @default(BOOKED)
+  closedAt     DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  // Flags written by the alert engine (not statuses).
+  atRisk  Boolean @default(false)
+  overdue Boolean @default(false)
+
+  source      ShipmentSource @default(CS)
+  assignedCsId String
+  assignedCs   User   @relation("AssignedCs", fields: [assignedCsId], references: [id])
+  createdById  String
+  createdBy    User   @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  events      MilestoneEvent[]
+  alerts      Alert[]
+  attachments Attachment[]     @relation("ShipmentAttachments")
+  fieldLinks  FieldLink[]
+  intake      EmailIntake?
+
+  @@index([status])
+  @@index([assignedCsId])
+  @@index([shipperId])
+  @@index([etdMnl])
+}
+
+// Atomic counters for Job No. and HBL/HAWB No. Key examples: "JOB:O:2610", "HBL:O:26".
+model NumberSequence {
+  key   String @id
+  value Int
+}
+
+// Append-only audit log. Never updated or deleted.
+model MilestoneEvent {
+  id         String      @id @default(uuid())
+  shipmentId String
+  shipment   Shipment    @relation(fields: [shipmentId], references: [id])
+  type       String      // e.g. CREATED, PICKED_UP, FSI_SUBMITTED, FIELD_CHANGED, HBL_EDITED
+  value      String?     // JSON or plain text describing the change
+  note       String?
+  actorId    String?
+  actor      User?       @relation(fields: [actorId], references: [id])
+  source     EventSource
+  occurredAt DateTime    @default(now())
+
+  @@index([shipmentId, occurredAt])
+  @@index([type, occurredAt])
+}
+
+model DeadlineRule {
+  id           String       @id @default(uuid())
+  deadlineType DeadlineType @unique
+  // Due time = shipment[baseField] + offsetMinutes (e.g. PICKUP: requestedPickupAt + 0,
+  // BOC_UPLOAD: fsiCutoffAt - 1440). Deliberately not a rule language.
+  baseField     String
+  offsetMinutes Int          @default(0)
+  // Reminder offsets in minutes before due, JSON array e.g. [1440, 240, 60]
+  reminderOffsets Json
+  overdueRepeatMinutes Int   @default(120)
+  overdueMaxPerDay     Int   @default(3)
+  enabled       Boolean      @default(true)
+  updatedAt     DateTime     @updatedAt
+}
+
+model Alert {
+  id            String       @id @default(uuid())
+  shipmentId    String
+  shipment      Shipment     @relation(fields: [shipmentId], references: [id])
+  deadlineType  DeadlineType
+  level         AlertLevel
+  // Minutes relative to due time: negative = before (reminders), 0 = due, positive = overdue repeat.
+  offsetMinutes Int
+  dueAt         DateTime
+  sentAt        DateTime?
+  channels      String       @default("") // comma-separated channels delivered, e.g. "IN_APP,EMAIL"
+  ackById       String?
+  ackBy         User?        @relation("AlertAckBy", fields: [ackById], references: [id])
+  ackAt         DateTime?
+  snoozedUntil  DateTime?
+  resolvedAt    DateTime?    // set when the milestone is completed
+  createdAt     DateTime     @default(now())
+
+  notifications Notification[]
+
+  // Idempotency: the same alert is never created (and so never sent) twice.
+  @@unique([shipmentId, deadlineType, level, offsetMinutes, dueAt])
+  @@index([resolvedAt])
+}
+
+// In-app notification center, one row per recipient.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  alertId   String?
+  alert     Alert?    @relation(fields: [alertId], references: [id])
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model EmailIntake {
+  id            String       @id @default(uuid())
+  rawText       String
+  attachmentText String?
+  extractedJson Json?
+  status        IntakeStatus @default(PENDING_REVIEW)
+  shipmentId    String?      @unique
+  shipment      Shipment?    @relation(fields: [shipmentId], references: [id])
+  createdById   String
+  createdBy     User         @relation(fields: [createdById], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Attachment {
+  id           String         @id @default(uuid())
+  shipmentId   String
+  shipment     Shipment       @relation("ShipmentAttachments", fields: [shipmentId], references: [id])
+  kind         AttachmentKind
+  storageKey   String         // path inside the storage backend
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+
+  arrastreFor Shipment? @relation("ArrastreProof")
+}
+
+model FieldLink {
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique // sha256 of the URL token; raw token is never stored
+  shipmentId  String
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id])
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
