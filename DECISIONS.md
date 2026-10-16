@@ -221,3 +221,45 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
    server reached as `http://192.168.x.x` the button falls back to the legacy copy command.
 10. **No rate limiting** on `/f/{token}`. Tokens are 256-bit random, so guessing is not practical. Add
     rate limiting at the reverse proxy when deployed publicly.
+
+## Step 6 decisions (daily and monthly reports, Excel)
+
+1. **Daily report scope follows access rules.** Supervisors get every shipment. Each CS gets a report of
+   their own shipments (assigned or created), both on `/reports/daily` and in their 07:30 email. The
+   spec says "email to supervisor and CS"; sending each CS everyone's shipments would bypass the Step 3
+   access rule.
+2. **07:30 delivery without a second timer.** On every 5-minute tick, the scheduler sends today's report
+   once Manila app time is past 07:30. A `dailyReport:<date>` row is the once-per-day claim, so
+   restarts or two schedulers never send it twice, and a scheduler started at 09:00 still sends that
+   day's report. If sending fails the claim is released and the next tick retries. Jumping the
+   simulated clock past 07:30 triggers it in demos. "Email it now" (supervisor) sends on demand and
+   does not affect the automatic send.
+3. **Daily sections** (spec order; Overdue moved to the top in red):
+   Overdue = any of the five deadlines past due and not done (not after departure, Step 3 rule);
+   Pick-ups today and tomorrow (requested pick-up, done or not); Cut-offs due today (FSI and
+   pre-advise cut-off times falling today); Pending BOC uploads and arrastre payments (all open ones,
+   not just today); Departed yesterday (ATD in yesterday, Manila); Missing mandatory data (Step 2 rule).
+   Cancelled shipments never appear.
+4. **The emailed report is a text summary** (max 25 lines per section) **plus the full Excel file**
+   attached. No HTML email in the MVP.
+5. **Monthly definitions** (`src/lib/reports/monthly.ts`):
+   - *Totals by cargo type / destination / shipper* = shipments **created** (Job No. issued) in the
+     month. Cancelled ones are counted separately and left out of the breakdowns. "By mode" is
+     dropped (ocean only).
+   - *On-time rate* = deadlines **falling due** in the month: on time = done at or before the due time.
+     Missed = done late, or still open after the due time. Deadlines not yet due are left out. A step
+     left open when the ship departed counts as missed (Step 3 rule).
+   - *Average pick-up delay* = actual − requested, over pick-ups requested in the month (negative =
+     early). *Average pick-up to ATD* = over shipments departing in the month.
+   - *Arrastre on time vs late* = NNR arrastre deadlines falling due in the month.
+   - Monthly report is supervisor-only (spec section 4).
+6. **Excel:** real date cells showing Manila wall-clock time (`DD-MMM-YYYY HH:MM`), bold header rows,
+   frozen panes, and an auto-filter on the raw sheet. Monthly: Summary, On-time rate, Missed deadlines,
+   Missed by CS & shipper, Volume, Raw data. Daily: report + Raw data.
+7. **Raw-data columns are an [ASSUMPTION]** until the real spreadsheet headers are provided. They are one
+   list in `src/lib/columns.ts`; rename or reorder there and both exports follow. Unlike the board,
+   the raw sheet has separate columns for each due time and done time (e.g. "FSI Cut-off" and "FSI
+   Submitted").
+8. **Downloads are access-checked route handlers** (`/reports/daily/export`, `/reports/monthly/export`)
+   with `Cache-Control: private, no-store`. Anonymous requests are redirected to login, and CS get 403
+   on the monthly export.
