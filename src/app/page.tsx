@@ -33,7 +33,7 @@ export default async function Home() {
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
             <tr>
-              {["Job No.", "HBL/HAWB", "Mode", "Shipper", "Destination", "Pick-up", "ETD MNL", "Status", "CS"].map((h) => (
+              {["Job No.", "HBL No.", "Shipper", "Destination", "Pick-up", "ETD MNL", "Status", "CS"].map((h) => (
                 <th key={h} className="whitespace-nowrap px-3 py-2">{h}</th>
               ))}
             </tr>
@@ -42,8 +42,7 @@ export default async function Home() {
             {shipments.map((s) => (
               <tr key={s.id}>
                 <td className="whitespace-nowrap px-3 py-2 font-mono">{s.jobNo}</td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono">{s.hblHawbNo}</td>
-                <td className="px-3 py-2">{s.mode}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono">{s.hblNo}</td>
                 <td className="px-3 py-2">{s.shipper.name}</td>
                 <td className="px-3 py-2">{s.destinationPort}</td>
                 <td className="whitespace-nowrap px-3 py-2">{formatDateTime(s.requestedPickupAt)}</td>

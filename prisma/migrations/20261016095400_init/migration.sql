@@ -41,10 +41,8 @@ CREATE TABLE "Shipper" (
 CREATE TABLE "Shipment" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "jobNo" TEXT NOT NULL,
-    "mode" TEXT NOT NULL,
-    "hblHawbNo" TEXT,
+    "hblNo" TEXT,
     "carrierBookingRef" TEXT,
-    "mawbNo" TEXT,
     "shipperId" TEXT NOT NULL,
     "consigneeName" TEXT,
     "destinationPort" TEXT NOT NULL,
@@ -214,7 +212,7 @@ CREATE UNIQUE INDEX "Shipper_name_key" ON "Shipper"("name");
 CREATE UNIQUE INDEX "Shipment_jobNo_key" ON "Shipment"("jobNo");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Shipment_hblHawbNo_key" ON "Shipment"("hblHawbNo");
+CREATE UNIQUE INDEX "Shipment_hblNo_key" ON "Shipment"("hblNo");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Shipment_arrastreProofId_key" ON "Shipment"("arrastreProofId");

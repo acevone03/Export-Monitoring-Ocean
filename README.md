@@ -1,7 +1,7 @@
 # NNR Export Monitor (MVP)
 
-Export shipment monitoring for NNR Global Logistics: one record per shipment, auto-numbered
-Job No. and HBL/HAWB, computed deadlines with escalating alerts, and daily/monthly reports.
+**Ocean** export shipment monitoring for NNR Global Logistics: one record per shipment, auto-numbered
+Job No. and HBL No., computed deadlines with escalating alerts, and daily/monthly reports.
 All times are Asia/Manila; dates display as `DD-MMM-YYYY`, 24h time.
 
 ## Run (Node 20+)

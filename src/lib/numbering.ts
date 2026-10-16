@@ -1,13 +1,15 @@
-import type { Prisma, PrismaClient, Mode } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { manilaParts } from "./time";
 
 // [ASSUMPTION] Formats from spec Section 5.1, isolated here so they are cheap to change.
-//   Job No.:   EX-{O|A}-{YYMM}-{seq4}   sequence resets monthly per mode
-//   HBL/HAWB:  NNR{O|A}{YY}{seq5}        sequence resets yearly per mode, never reused
+// Ocean export only, so the mode letter is fixed to "O".
+//   Job No.:  EX-O-{YYMM}-{seq4}   sequence resets monthly
+//   HBL No.:  NNRO{YY}{seq5}       sequence resets yearly, never reused
 
 type Tx = PrismaClient | Prisma.TransactionClient;
 
-const modeLetter = (mode: Mode) => (mode === "OCEAN" ? "O" : "A");
+const JOB_PREFIX = "EX-O-";
+const HBL_PREFIX = "NNRO";
 const pad = (n: number, w: number) => String(n).padStart(w, "0");
 
 /**
@@ -29,27 +31,24 @@ export async function nextSequence(db: Tx, key: string): Promise<number> {
   return Number(rows[0].value);
 }
 
-export function formatJobNo(mode: Mode, at: Date, seq: number): string {
+export function formatJobNo(at: Date, seq: number): string {
   const p = manilaParts(at);
-  return `EX-${modeLetter(mode)}-${pad(p.year % 100, 2)}${pad(p.month, 2)}-${pad(seq, 4)}`;
+  return `${JOB_PREFIX}${pad(p.year % 100, 2)}${pad(p.month, 2)}-${pad(seq, 4)}`;
 }
 
-export function formatHblHawbNo(mode: Mode, at: Date, seq: number): string {
+export function formatHblNo(at: Date, seq: number): string {
   const p = manilaParts(at);
-  return `NNR${modeLetter(mode)}${pad(p.year % 100, 2)}${pad(seq, 5)}`;
+  return `${HBL_PREFIX}${pad(p.year % 100, 2)}${pad(seq, 5)}`;
 }
 
-export async function nextJobNo(db: Tx, mode: Mode, at: Date): Promise<string> {
+export async function nextJobNo(db: Tx, at: Date): Promise<string> {
   const p = manilaParts(at);
-  const key = `JOB:${modeLetter(mode)}:${pad(p.year % 100, 2)}${pad(p.month, 2)}`;
-  return formatJobNo(mode, at, await nextSequence(db, key));
+  const key = `JOB:${pad(p.year % 100, 2)}${pad(p.month, 2)}`;
+  return formatJobNo(at, await nextSequence(db, key));
 }
 
-export async function nextHblHawbNo(db: Tx, mode: Mode, at: Date): Promise<string> {
+export async function nextHblNo(db: Tx, at: Date): Promise<string> {
   const p = manilaParts(at);
-  const key = `HBL:${modeLetter(mode)}:${pad(p.year % 100, 2)}`;
-  return formatHblHawbNo(mode, at, await nextSequence(db, key));
+  const key = `HBL:${pad(p.year % 100, 2)}`;
+  return formatHblNo(at, await nextSequence(db, key));
 }
-
-/** Label shown in the UI for the house document number. */
-export const houseDocLabel = (mode: Mode) => (mode === "OCEAN" ? "HBL No." : "HAWB No.");

@@ -22,7 +22,6 @@ describe("deadline computation", () => {
 
   it("skips arrastre unless NNR is responsible", () => {
     expect(computeDueAt(rule("ARRASTRE"), ship({ arrastreResponsibility: "SHIPPER" }))).toBeNull();
-    expect(computeDueAt(rule("ARRASTRE"), ship({ arrastreResponsibility: "NA" }))).toBeNull();
   });
 
   it("returns null when the base date is unknown", () => {

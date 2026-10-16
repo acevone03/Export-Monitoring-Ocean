@@ -20,15 +20,9 @@ enum Role {
   CUSTOMER // reserved for the post-MVP customer portal; no UI grants it yet
 }
 
-enum Mode {
-  OCEAN
-  AIR
-}
-
 enum CargoType {
   FCL
   LCL
-  AIR
 }
 
 enum LclUnit {
@@ -39,7 +33,6 @@ enum LclUnit {
 enum ArrastreResponsibility {
   NNR
   SHIPPER
-  NA
 }
 
 enum DeclarationStatus {
@@ -163,12 +156,11 @@ model Shipper {
 
 model Shipment {
   id        String @id @default(uuid())
-  jobNo     String @unique
-  mode      Mode
-  hblHawbNo String? @unique // assigned on confirmation, never reused
+  // Ocean export only (see DECISIONS.md). No mode field; numbering formats carry the "O".
+  jobNo String  @unique
+  hblNo String? @unique // assigned on confirmation, never reused
 
   carrierBookingRef String?
-  mawbNo            String? // AIR only
 
   shipperId     String
   shipper       Shipper @relation(fields: [shipperId], references: [id])
@@ -177,7 +169,7 @@ model Shipment {
   destinationPort String
   pod             String
 
-  // OCEAN FCL only: JSON array of {size: "20"|"40"|"40HC", qty: number}
+  // FCL only: JSON array of {size: "20"|"40"|"40HC", qty: number}
   containerPlan Json?
   cargoType     CargoType
   lclQty        Int?
@@ -244,7 +236,7 @@ model Shipment {
   @@index([etdMnl])
 }
 
-// Atomic counters for Job No. and HBL/HAWB No. Key examples: "JOB:O:2610", "HBL:O:26".
+// Atomic counters for Job No. and HBL No. Key examples: "JOB:2610", "HBL:26".
 model NumberSequence {
   key   String @id
   value Int

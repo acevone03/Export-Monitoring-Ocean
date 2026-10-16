@@ -3,6 +3,18 @@
 Every **[OPEN]** and **[ASSUMPTION]** from the spec, and anything decided during the build.
 "Where" points to the single place to change it.
 
+## Scope change: ocean export only
+
+The spec covers ocean and air. **The product owner has narrowed the app to ocean export only**
+(16-Oct-2026). Consequences:
+
+- No `mode` field. Job No. is `EX-O-{YYMM}-{seq4}` and the house document is always an **HBL**
+  (`NNRO{YY}{seq5}`). The fixed "O" lives in `src/lib/numbering.ts` (`JOB_PREFIX`, `HBL_PREFIX`), so
+  air could be re-added later as a second prefix without renumbering existing ocean jobs.
+- `hbl_hawb_no` becomes `hblNo`; `mawb_no` is dropped. `cargo_type` is `FCL | LCL`.
+- **Arrastre still applies to every shipment.** Only the `NA` option (spec: "NA for AIR") is removed, so
+  `arrastre_responsibility` is `NNR | SHIPPER`. The arrastre deadline and alerts apply when it is `NNR`.
+
 ## Spec [OPEN] items
 
 | # | Item | Resolution for now | Where |
@@ -10,7 +22,7 @@ Every **[OPEN]** and **[ASSUMPTION]** from the spec, and anything decided during
 | O1 | What "FSI" means | Treated as **Final Shipping Instruction**. Only UI labels depend on it. | UI labels |
 | O2 | How FSI completion is recorded | Dedicated `fsiSubmittedAt` field, set by a "Mark FSI submitted" button, plus an `FSI_SUBMITTED` milestone event. Same pattern for pre-advise (`preadviseSentAt`). | `prisma/schema.prisma` |
 | O3 | BOC upload deadline rule | `fsiCutoffAt - 24h` (spec default), editable in `deadline_rules`. | `src/lib/deadlines.ts` `DEFAULT_RULES` |
-| O4 | Arrastre deadline rule | `etdMnl - 24h`, only when arrastre = `NNR`. Editable. | same |
+| O4 | Arrastre deadline rule | `etdMnl - 24h`, only when arrastre = `NNR` (skipped when `SHIPPER`). Editable. | same |
 | O5 | Extra notification channel | Telegram stub behind a `Notifier` interface (Step 4). | — |
 | O6 | Mailbox reading / forwarding | Not built. CS pastes email text into `/intake` (Step 7). | — |
 
@@ -18,7 +30,7 @@ Every **[OPEN]** and **[ASSUMPTION]** from the spec, and anything decided during
 
 | # | Item | Implemented as | Where |
 |---|---|---|---|
-| A1 | HBL/HAWB format | `NNR{O\|A}{YY}{seq5}`, sequence per mode per **year** (Manila calendar) | `src/lib/numbering.ts` |
+| A1 | HBL format | `NNRO{YY}{seq5}`, sequence per **year** (Manila calendar) | `src/lib/numbering.ts` |
 | A2 | Export declaration statuses | `PENDING → FILED → ASSESSED → RELEASED` | `prisma/schema.prisma` enum |
 | A3 | Default reminder/escalation timing | Reminders at -24h, -4h, -1h; overdue at due time then every 2h, max 3/day. Stored per rule. | `DEFAULT_RULES` |
 | A4 | Stack | Next.js 15 (App Router) + Prisma 6 + SQLite + Tailwind 4 + zod + bcryptjs + Vitest | `package.json` |
@@ -29,7 +41,7 @@ Every **[OPEN]** and **[ASSUMPTION]** from the spec, and anything decided during
    datetimes. Customer emails often lack them, so an intake must still be saveable. A shipment with no
    requested pick-up has status `BOOKED` (otherwise `BOOKED` could never occur). Missing values are
    reported under "Shipments with missing mandatory data" (daily report §6).
-2. **HBL/HAWB is assigned when the shipment is created.** "Confirmation" = CS saving the manual form,
+2. **The HBL No. is assigned when the shipment is created.** "Confirmation" = CS saving the manual form,
    or confirming the reviewed AI extraction. Nothing is saved before a human confirms, so there is no
    earlier draft state that would need a number.
 3. **Job No. month uses the Manila calendar.** 23:30 UTC on 31 Oct is already November in Manila.
