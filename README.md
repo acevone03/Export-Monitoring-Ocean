@@ -28,6 +28,12 @@ To start over: delete `prisma/dev.db` and run `npm run setup` again.
 4. Without SMTP configured, alert emails land in the outbox at `/dev/outbox`. Set `SMTP_*` in `.env` to send real email.
 5. Mark the step done on the shipment page: its alerts close. **Reset to real time** when finished.
 
+### AI email intake
+
+Set `ANTHROPIC_API_KEY` in `.env` (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`) and restart.
+CS paste a customer email at **From email** (`/intake`); the booking is pre-filled for review and only saved when CS confirm.
+Without a key, the page shows a disabled notice and the manual form still works.
+
 Dev tools exist only when `ENABLE_DEV_TOOLS=true`. Set it to `false` in production.
 
 ## Other commands
@@ -59,5 +65,5 @@ DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 - [x] 4. Deadline engine + scheduler + notifications + simulate-time
 - [x] 5. Field magic-link page
 - [x] 6. Daily and monthly reports + Excel export
-- [ ] 7. AI email intake
+- [x] 7. AI email intake
 - [ ] 8. Spreadsheet import, process-map page, docs

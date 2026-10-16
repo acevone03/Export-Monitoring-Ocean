@@ -36,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {can.editShipments(user) && (
                 <>
                   <Link href="/shipments/new" className="text-slate-700 hover:text-blue-700">New shipment</Link>
+                  <Link href="/intake" className="text-slate-700 hover:text-blue-700">From email</Link>
                   <Link href="/shippers" className="text-slate-700 hover:text-blue-700">Shippers</Link>
                 </>
               )}

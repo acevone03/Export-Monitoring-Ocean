@@ -39,15 +39,19 @@ type Props = {
   destinations: string[];
   submitLabel: string;
   isNew: boolean;
+  /** Review highlights (AI intake): field -> note. Highlighted fields need a human look. */
+  flags?: Partial<Record<keyof ShipmentFormValues, string>>;
+  /** Shipper text to show when no shipper matched (e.g. the name as written in the email). */
+  initialShipperName?: string;
 };
 
-export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew }: Props) {
+export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const err = state.fieldErrors ?? {};
   const v = (k: keyof ShipmentFormValues) => state.values?.[k] ?? (initial[k] as string);
 
-  const [shipperName, setShipperName] = useState(shippers.find((s) => s.id === initial.shipperId)?.name ?? "");
+  const [shipperName, setShipperName] = useState(shippers.find((s) => s.id === initial.shipperId)?.name ?? initialShipperName ?? "");
   const [shipperId, setShipperId] = useState(initial.shipperId);
   const [arrastre, setArrastre] = useState(initial.arrastreResponsibility);
   const [arrastreTouched, setArrastreTouched] = useState(!isNew);
@@ -80,7 +84,7 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       <input type="hidden" name="containerPlan" value={cargoType === "FCL" ? JSON.stringify(containers) : "[]"} />
 
       <Section title="Booking">
-        <Field label="Shipper" error={err.shipperId} span={2}>
+        <Field label="Shipper" error={err.shipperId} flag={flags.shipperId} span={2}>
           <input
             className="input"
             list="shipper-list"
@@ -101,10 +105,10 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Consignee (optional)" error={err.consigneeName} span={2}>
           <input className="input" name="consigneeName" defaultValue={v("consigneeName")} />
         </Field>
-        <Field label="Destination" error={err.destinationPort} span={2}>
+        <Field label="Destination" error={err.destinationPort} flag={flags.destinationPort} span={2}>
           <input className="input" name="destinationPort" list="dest-list" defaultValue={v("destinationPort")} placeholder="e.g. USLAX Los Angeles" required autoComplete="off" />
         </Field>
-        <Field label="Port of discharge" error={err.pod} span={2}>
+        <Field label="Port of discharge" error={err.pod} flag={flags.pod} span={2}>
           <input className="input" name="pod" list="dest-list" defaultValue={v("pod")} placeholder="e.g. USLGB Long Beach" required autoComplete="off" />
         </Field>
         <datalist id="dest-list">
@@ -113,14 +117,14 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       </Section>
 
       <Section title="Cargo">
-        <Field label="Cargo type" error={err.cargoType}>
+        <Field label="Cargo type" error={err.cargoType} flag={flags.cargoType}>
           <select className="input" name="cargoType" value={cargoType} onChange={(e) => setCargoType(e.target.value as "FCL" | "LCL")}>
             <option value="FCL">FCL</option>
             <option value="LCL">LCL</option>
           </select>
         </Field>
         {cargoType === "FCL" ? (
-          <Field label="Containers" error={err.containerPlan} span={3}>
+          <Field label="Containers" error={err.containerPlan} flag={flags.containerPlan} span={3}>
             <div className="space-y-2">
               {containers.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -160,7 +164,7 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
           </Field>
         ) : (
           <>
-            <Field label="LCL quantity" error={err.lclQty}>
+            <Field label="LCL quantity" error={err.lclQty} flag={flags.lclQty}>
               <input className="input" type="number" min={1} name="lclQty" defaultValue={v("lclQty")} />
             </Field>
             <Field label="Unit">
@@ -174,7 +178,7 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       </Section>
 
       <Section title="Schedule and cut-offs (Manila time)">
-        <Field label="Requested pick-up" error={err.requestedPickupAt}>
+        <Field label="Requested pick-up" error={err.requestedPickupAt} flag={flags.requestedPickupAt}>
           <input className="input" type="datetime-local" name="requestedPickupAt" defaultValue={v("requestedPickupAt")} />
         </Field>
         <Field label="FSI cut-off" error={err.fsiCutoffAt}>
@@ -246,12 +250,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, error, span = 1, children }: { label: string; error?: string; span?: 1 | 2 | 3; children: React.ReactNode }) {
+function Field({ label, error, flag, span = 1, children }: { label: string; error?: string; flag?: string; span?: 1 | 2 | 3; children: React.ReactNode }) {
   const spans = { 1: "", 2: "lg:col-span-2", 3: "sm:col-span-2 lg:col-span-3" };
   return (
-    <div className={spans[span]}>
-      <label className="label">{label}</label>
+    <div className={`${spans[span]} ${flag ? "-m-1.5 rounded-md bg-amber-50 p-1.5 ring-2 ring-amber-400" : ""}`}>
+      <label className="label">{label}{flag && <span className="ml-1 text-amber-700" aria-hidden>⚠</span>}</label>
       {children}
+      {flag && <p className="mt-1 text-xs text-amber-800">{flag}</p>}
       {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
   );

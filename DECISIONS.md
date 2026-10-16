@@ -263,3 +263,43 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 8. **Downloads are access-checked route handlers** (`/reports/daily/export`, `/reports/monthly/export`)
    with `Cache-Control: private, no-store`. Anonymous requests are redirected to login, and CS get 403
    on the monthly export.
+
+## Step 7 decisions (AI email intake)
+
+1. **Model:** `claude-sonnet-4-6` as named in the spec, overridable with `ANTHROPIC_MODEL` (e.g. the newer
+   `claude-sonnet-5-5`) without code changes. The model that read each email is stored on the intake.
+2. **Structured output:** the Anthropic TypeScript SDK's `messages.parse` with a Zod schema
+   (`output_config.format`). The response is schema-checked before use. Refusal, truncation,
+   unparsable output and API errors (bad key, rate limit, network) become plain messages for CS.
+3. **What is sent (Data Privacy Act):** only the pasted email text, the optional attachment text, and
+   today's Manila date (needed for "next Tuesday"). No shipper list, user data or other database
+   content is sent. **Shipper matching happens on our server** against the shipper master: an exact
+   name match ignoring punctuation and Inc/Corp/Co/etc., else a single unambiguous partial match. It
+   never guesses between several. The pasted email is wrapped as data and the model is told to ignore
+   instructions inside it.
+4. **Fields extracted** (spec list): shipper, destination, cargo type, container sizes/qty or LCL qty+unit,
+   requested pick-up date (+ time if stated), other remarks. The model also returns a confidence level
+   per field group, a `needs_review` flag for the date, the exact source words, and short notes for the
+   reviewer.
+5. **Dates:** relative dates are resolved from today's Manila date. Numeric dates like 10/11 are read as
+   month/day (common in the Philippines) **and always flagged** for review. If no time is given,
+   08:00 is pre-filled and flagged.
+6. **Highlighting:** a field is outlined amber with a reason when the model was not fully confident,
+   when it was not found, when the shipper needed a partial match or is unknown, or when we assumed
+   something. POD is pre-filled from the destination and always flagged. Nothing is saved before CS
+   press **Confirm**.
+7. **Customer remarks go into "Carrier remarks"**, the only free-text field in the spec's data model. A
+   separate "customer remarks" field would be a small schema change if wanted.
+8. **The pasted email is saved before the AI call**, so nothing is lost if the AI is down. A failed
+   extraction shows the error with **Try again** and **Enter manually**. **Discard** marks the intake
+   REJECTED (kept for audit, never deleted).
+9. **Double-confirm protection:** confirming claims the intake (PENDING_REVIEW → CONFIRMED) before the
+   shipment is created. A second click or the back button cannot create a second shipment. If creation
+   fails, the claim is released.
+10. **Traceability:** the shipment's source is `EMAIL`, its CREATED event shows "via Email intake", and the
+    shipment page links to the original email. CS see their own intakes; supervisors see all.
+11. **[OPEN O6] Mailbox reading / forwarding** remains out of scope. A forwarding address could later feed
+    the same `EmailIntake` table without changing the review step.
+12. **Testing without a key:** unit tests inject a fake client. The end-to-end check pointed the real SDK
+    at a local mock of the Messages endpoint via `ANTHROPIC_BASE_URL`. **Not yet verified against the
+    live API**, which needs a real key.

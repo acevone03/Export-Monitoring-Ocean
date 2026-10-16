@@ -18,6 +18,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "exceljs": "^4.4.0",

@@ -41,6 +41,7 @@ export default async function ShipmentPage({
         shipper: true,
         assignedCs: { select: { name: true } },
         arrastreProof: true,
+        intake: { select: { id: true } },
         events: { orderBy: { occurredAt: "desc" }, include: { actor: { select: { name: true } } } },
         fieldLinks: {
           where: { revokedAt: null, expiresAt: { gt: new Date() } },
@@ -119,7 +120,11 @@ export default async function ShipmentPage({
             <Row k="ETA" v={formatDateTime(s.eta)} />
             <Row k="Arrastre by" v={s.arrastreResponsibility === "NNR" ? "NNR" : "Shipper"} />
             <Row k="Assigned CS" v={s.assignedCs.name} />
-            <Row k="Source" v={s.source} />
+            <dt className="text-slate-500">Source</dt>
+            <dd>
+              {s.source}
+              {s.intake && <Link href={`/intake/${s.intake.id}`} className="ml-2 text-blue-700 hover:underline">original email</Link>}
+            </dd>
           </dl>
         </section>
 

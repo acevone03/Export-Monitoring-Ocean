@@ -323,6 +323,8 @@ model EmailIntake {
   rawText       String
   attachmentText String?
   extractedJson Json?
+  extractError  String?      // last extraction failure (API down, refusal, …); CS can retry
+  model         String?      // model that produced extractedJson
   status        IntakeStatus @default(PENDING_REVIEW)
   shipmentId    String?      @unique
   shipment      Shipment?    @relation(fields: [shipmentId], references: [id])
