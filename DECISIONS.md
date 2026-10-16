@@ -191,3 +191,33 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
     always show the live state.
 13. **Timestamps under simulation:** alerts and in-app notifications record app time (simulated when
     active), so a demo timeline reads correctly. `readAt` uses real time.
+
+## Step 5 decisions (field magic links)
+
+1. **A link can be made for a named field person** (optional). Their name then appears on the timeline
+   ("Carlo Dizon via Field link") although they never log in. Without a name, the event shows the
+   source `FIELD_LINK` and no person.
+2. **Only the SHA-256 hash of the token is stored.** The full URL is shown to CS once, when created
+   (copy, SMS or Viber share buttons). If it is lost, CS creates a new one. Several links per shipment
+   can be active at once (e.g. two field staff), and each can be revoked from the shipment page, which also
+   shows "last used".
+3. **Expiry is 7 days on the real clock** (security, like sessions). Simulated demo time does not
+   extend or shorten it. Links stop working when the shipment is cancelled or closed.
+4. **Field page shows only what is needed:** Job No., shipper, requested pick-up, the shipper's default
+   pick-up address, cargo, destination, and current pick-up / declaration state. No consignee, HBL,
+   prices or other shipments (Data Privacy Act: minimum necessary).
+5. **Buttons:** Picked up (until done), Export declaration filed (while PENDING), Declaration released
+   (until RELEASED). **ASSESSED** is set by CS only, since it is not in the spec's field buttons. Each button needs a
+   **second tap within 5 seconds**, so a stray tap does not record a milestone.
+6. **Repeated taps are harmless:** "already recorded (time)" is shown and nothing is written, e.g.
+   after a retry on a weak mobile connection.
+7. **Notes and photos:** optional note and phone-camera photo (JPG/PNG/WEBP/HEIC, max 10 MB) with any
+   button, or on their own ("Send note / photo only"). The note on a milestone tap is stored on that
+   milestone event. A photo, or a note sent on its own, is a separate `NOTE` event. Photos are
+   `FIELD_PHOTO` attachments, viewable by CS from the timeline (login required).
+8. **Milestone time = the moment of the tap.** Field staff cannot back-date. If the pick-up happened
+   earlier, they say so in the note, or CS records it on their behalf with the right time (Step 2 fallback).
+9. **Copy link works on plain HTTP too.** The browser clipboard API needs HTTPS, so on an office
+   server reached as `http://192.168.x.x` the button falls back to the legacy copy command.
+10. **No rate limiting** on `/f/{token}`. Tokens are 256-bit random, so guessing is not practical. Add
+    rate limiting at the reverse proxy when deployed publicly.

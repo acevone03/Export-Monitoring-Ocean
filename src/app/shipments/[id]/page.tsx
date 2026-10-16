@@ -11,7 +11,8 @@ import { missingMandatory } from "@/lib/mandatory";
 import { deadlinesMoot } from "@/lib/deadline-status";
 import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
-import { milestoneAction, editHblAction } from "./actions";
+import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction } from "./actions";
+import { FieldLinkPanel } from "@/components/FieldLinkPanel";
 
 const DUE_STYLE: Record<DueState, string> = {
   done: "bg-green-50 text-green-800 border-green-200",
@@ -41,12 +42,18 @@ export default async function ShipmentPage({
         assignedCs: { select: { name: true } },
         arrastreProof: true,
         events: { orderBy: { occurredAt: "desc" }, include: { actor: { select: { name: true } } } },
+        fieldLinks: {
+          where: { revokedAt: null, expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: "desc" },
+          include: { assignee: { select: { name: true } }, createdBy: { select: { name: true } } },
+        },
       },
     })
     .catch(() => null);
   if (!s) notFound();
 
   const now = await clockNow();
+  const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
   const moot = deadlinesMoot(s); // after departure / cancel / close, open deadlines no longer turn red
@@ -217,6 +224,36 @@ export default async function ShipmentPage({
               )}
             </div>
           )}
+          {open && (
+            <div className="card mt-4 space-y-3">
+              <div>
+                <h3 className="font-medium">Field update link</h3>
+                <p className="text-xs text-slate-600">
+                  A no-login page for the field person&apos;s phone: Picked up, Declaration filed, Declaration released, plus note/photo.
+                  Valid 7 days.
+                </p>
+              </div>
+              <FieldLinkPanel shipmentId={s.id} jobNo={s.jobNo} fieldUsers={fieldUsers} action={createFieldLinkAction} />
+              {s.fieldLinks.length > 0 && (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {s.fieldLinks.map((l) => (
+                    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+                      <span>{l.assignee ? `For ${l.assignee.name}` : "Any field person"}</span>
+                      <span className="text-xs text-slate-500">
+                        by {l.createdBy.name}, expires {formatDateTime(l.expiresAt)}
+                        {l.lastUsedAt ? `, last used ${formatDateTime(l.lastUsedAt)}` : ", not used yet"}
+                      </span>
+                      <form action={revokeFieldLinkAction} className="ml-auto">
+                        <input type="hidden" name="shipmentId" value={s.id} />
+                        <input type="hidden" name="linkId" value={l.id} />
+                        <button className="text-xs text-red-700 hover:underline">Revoke</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {can.editHblNo(user) && (
             <details className="pt-2 text-sm">
               <summary className="cursor-pointer text-slate-600">Correct HBL No. (supervisor)…</summary>
@@ -239,6 +276,9 @@ export default async function ShipmentPage({
               <span className="whitespace-nowrap text-slate-500">{formatDateTime(e.occurredAt)}</span>
               <span>
                 {describeEvent(e)}
+                {photoId(e.value) && (
+                  <a href={`/api/attachments/${photoId(e.value)}`} target="_blank" className="ml-1 text-blue-700 hover:underline">View photo</a>
+                )}
                 {e.note && <span className="text-slate-600"> · “{e.note}”</span>}
                 <span className="text-xs text-slate-400"> · {e.actor?.name ?? "System"} via {SOURCE_LABEL[e.source]}</span>
               </span>
@@ -248,6 +288,15 @@ export default async function ShipmentPage({
       </section>
     </div>
   );
+}
+
+function photoId(value: string | null): string | null {
+  if (!value?.startsWith("{")) return null;
+  try {
+    return JSON.parse(value).attachmentId ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function nextDeclaration(cur: string) {

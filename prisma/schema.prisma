@@ -126,6 +126,7 @@ model User {
   notifications     Notification[]
   alertsAcked       Alert[]          @relation("AlertAckBy")
   fieldLinks        FieldLink[]
+  fieldLinksAssigned FieldLink[]     @relation("FieldLinkAssignee")
   intakes           EmailIntake[]
 }
 
@@ -353,9 +354,15 @@ model FieldLink {
   shipment    Shipment  @relation(fields: [shipmentId], references: [id])
   createdById String
   createdBy   User      @relation(fields: [createdById], references: [id])
+  // Field person the link was made for (optional): their name goes on the timeline.
+  assigneeId  String?
+  assignee    User?     @relation("FieldLinkAssignee", fields: [assigneeId], references: [id])
   expiresAt   DateTime
   revokedAt   DateTime?
+  lastUsedAt  DateTime?
   createdAt   DateTime  @default(now())
+
+  @@index([shipmentId])
 }
 
 // Small key/value store for app-wide settings shared by the web app and the scheduler,

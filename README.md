@@ -57,7 +57,7 @@ DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 - [x] 2. Shipment form + numbering + status machine + tests
 - [x] 3. Live board + shipment detail timeline
 - [x] 4. Deadline engine + scheduler + notifications + simulate-time
-- [ ] 5. Field magic-link page
+- [x] 5. Field magic-link page
 - [ ] 6. Daily and monthly reports + Excel export
 - [ ] 7. AI email intake
 - [ ] 8. Spreadsheet import, process-map page, docs

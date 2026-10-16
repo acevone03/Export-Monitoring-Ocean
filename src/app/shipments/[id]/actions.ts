@@ -11,6 +11,8 @@ import { MilestoneFormSchema } from "@/lib/milestone-input";
 import { addAttachment, DomainError, editHblNo, recordMilestone, updateShipment, type MilestoneInput } from "@/lib/shipments";
 import { storage, ALLOWED_UPLOADS, MAX_UPLOAD_BYTES } from "@/lib/storage";
 import type { ShipmentFormState } from "@/components/ShipmentForm";
+import { createFieldLink, revokeFieldLink } from "@/lib/field-links";
+import { formatDateTime } from "@/lib/time";
 import { formValuesOf } from "../data";
 
 export type ActionState = { ok?: string; error?: string };
@@ -109,4 +111,34 @@ export async function editHblAction(_prev: ActionState, form: FormData): Promise
   }
   revalidatePath(`/shipments/${p.data.shipmentId}`);
   return { ok: "HBL No. updated." };
+}
+
+// ---------- field magic links
+
+export type FieldLinkState = { error?: string; url?: string; expiresAt?: string; forName?: string | null };
+
+export async function createFieldLinkAction(_prev: FieldLinkState, form: FormData): Promise<FieldLinkState> {
+  const user = await requireUser(["CS", "SUPERVISOR"]);
+  const p = z.object({ shipmentId: Id, assigneeId: z.union([z.literal(""), Id]) }).safeParse(Object.fromEntries(form));
+  if (!p.success) return { error: "Invalid request." };
+  await assertShipmentAccess(user, p.data.shipmentId);
+  try {
+    const assigneeId = p.data.assigneeId || null;
+    const { token, expiresAt } = await createFieldLink(prisma, p.data.shipmentId, user, assigneeId);
+    const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+    const forName = assigneeId ? (await prisma.user.findUnique({ where: { id: assigneeId } }))?.name ?? null : null;
+    revalidatePath(`/shipments/${p.data.shipmentId}`);
+    return { url: `${base}/f/${token}`, expiresAt: formatDateTime(expiresAt), forName };
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function revokeFieldLinkAction(form: FormData) {
+  const user = await requireUser(["CS", "SUPERVISOR"]);
+  const p = z.object({ shipmentId: Id, linkId: Id }).parse(Object.fromEntries(form));
+  await assertShipmentAccess(user, p.shipmentId);
+  await revokeFieldLink(prisma, p.linkId, p.shipmentId);
+  revalidatePath(`/shipments/${p.shipmentId}`);
 }
