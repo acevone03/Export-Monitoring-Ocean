@@ -1,5 +1,6 @@
 import type { ShipmentFormValues } from "@/components/ShipmentForm";
 import type { Extraction } from "./extract";
+import { podCodeFor } from "../pod-codes";
 
 // Turns a Claude extraction into prefilled form values plus per-field review flags.
 // Everything flagged is highlighted on the review screen; nothing is saved until CS confirms.
@@ -48,6 +49,7 @@ export function extractionToForm(
   if (!destination) flags.destinationPort = "No destination found in the email.";
   else if (low(x.confidence.destination)) flags.destinationPort = "Destination was interpreted. Check.";
   if (destination) flags.pod = "Assumed same as destination. Change if it discharges elsewhere.";
+  if (destination && !podCodeFor(destination)) flags.podCode = "No HBL code known for this destination. Enter the 3-letter code.";
 
   // Cargo
   const merged = new Map<"20" | "40" | "40HC", number>();
@@ -95,6 +97,11 @@ export function extractionToForm(
       carrierBookingRef: "",
       carrierRemarks: x.remarks?.trim().slice(0, 2000) ?? "",
       assignedCsId,
+      arrastreCutoffAt: "",
+      podCode: podCodeFor(destination) ?? "",
+      declarationBy: "NNR",
+      declarationBroker: "",
+      partOfHblNo: "",
     },
   };
 }

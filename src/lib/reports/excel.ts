@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
-import { RAW_COLUMNS, type CellValue, type ExportShipment } from "../columns";
+import type { CellValue, ExportShipment } from "../columns";
+import { EXTRA_COLUMNS, SHEET_COLUMNS, SHEET_VALUE } from "../nnr-sheet";
 import { formatDateTime } from "../time";
 import type { DailyReport } from "./daily";
 import type { MonthlyReport } from "./monthly";
@@ -42,10 +43,49 @@ function table(
   return start + 1 + rows.length;
 }
 
-function rawSheet(wb: ExcelJS.Workbook, shipments: ExportShipment[]) {
-  const ws = wb.addWorksheet("Raw data", { views: [{ state: "frozen", ySplit: 1, xSplit: 1 }] });
-  table(ws, RAW_COLUMNS, shipments.map((s) => RAW_COLUMNS.map((c) => c.value(s))));
-  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: RAW_COLUMNS.length } };
+/**
+ * "Raw data": the shipments laid out exactly like NNR's monitoring sheet (same three header rows,
+ * same columns, same order), so current habits keep working; app-only columns follow after REMARKS.
+ */
+export function rawSheet(wb: ExcelJS.Workbook, shipments: ExportShipment[]) {
+  const ws = wb.addWorksheet("Raw data", { views: [{ state: "frozen", ySplit: 3, xSplit: 1 }] });
+  const n = SHEET_COLUMNS.length;
+  const head = (r: number, c: number, text: string) => {
+    const cell = ws.getRow(r).getCell(c);
+    cell.value = text;
+    cell.font = { bold: true };
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER } };
+  };
+  SHEET_COLUMNS.forEach((c, i) => {
+    for (let r = 1; r <= 3; r++) head(r, i + 1, c.header[r - 1]);
+    ws.getColumn(i + 1).width = c.width;
+  });
+  // Merged headings as in the original: single-label columns span all three rows; groups span across.
+  SHEET_COLUMNS.forEach((c, i) => {
+    const [top, mid, bottom] = c.header;
+    if (top && !mid && !bottom) ws.mergeCells(1, i + 1, 3, i + 1);
+    else if (!top && mid && !bottom) ws.mergeCells(2, i + 1, 3, i + 1);
+  });
+  for (const [from, to] of [[9, 10], [14, 16], [17, 18], [21, 22]]) ws.mergeCells(1, from, 2, to);
+  ws.mergeCells(1, 5, 1, 8);
+  EXTRA_COLUMNS.forEach((c, i) => {
+    const col = n + 2 + i; // one empty column after REMARKS
+    head(1, col, c.header);
+    ws.mergeCells(1, col, 3, col);
+    ws.getColumn(col).width = c.width;
+  });
+  shipments.forEach((s, ri) => {
+    const row = ws.getRow(4 + ri);
+    const put = (col: number, v: CellValue) => {
+      const cell = row.getCell(col);
+      cell.value = toCell(v) as ExcelJS.CellValue;
+      if (v instanceof Date) cell.numFmt = DATE_FMT;
+    };
+    SHEET_COLUMNS.forEach((c, i) => put(i + 1, SHEET_VALUE[c.key](s)));
+    EXTRA_COLUMNS.forEach((c, i) => put(n + 2 + i, c.value(s)));
+  });
+  ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3 + shipments.length, column: n } };
 }
 
 function titleRow(ws: ExcelJS.Worksheet, text: string, sub: string) {

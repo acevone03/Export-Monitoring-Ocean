@@ -9,6 +9,7 @@ export const RULE_BASE_FIELDS = [
   "fsiCutoffAt",
   "preadviseCutoffAt",
   "etdMnl",
+  "arrastreCutoffAt",
 ] as const;
 export type RuleBaseField = (typeof RULE_BASE_FIELDS)[number];
 
@@ -22,7 +23,8 @@ export const DEFAULT_RULES: Array<RuleLike & { reminderOffsets: number[]; overdu
   { deadlineType: "FSI", baseField: "fsiCutoffAt", offsetMinutes: 0 },
   { deadlineType: "PREADVISE", baseField: "preadviseCutoffAt", offsetMinutes: 0 },
   { deadlineType: "BOC_UPLOAD", baseField: "fsiCutoffAt", offsetMinutes: -24 * 60 },
-  { deadlineType: "ARRASTRE", baseField: "etdMnl", offsetMinutes: -24 * 60 },
+  // NNR enters the terminal's arrastre cut-off per shipment (monitoring sheet column), so it is used as is.
+  { deadlineType: "ARRASTRE", baseField: "arrastreCutoffAt", offsetMinutes: 0 },
 ].map((r) => ({
   ...(r as RuleLike),
   enabled: true,

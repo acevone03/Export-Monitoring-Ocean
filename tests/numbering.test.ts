@@ -13,9 +13,10 @@ describe("number formats", () => {
     expect(formatJobNo(fromManila(2026, 1, 5), 123)).toBe("EX-O-2601-0123");
   });
 
-  it("formats HBL No. as NNRO{YY}{seq5}", () => {
-    expect(formatHblNo(fromManila(2026, 10, 16), 7)).toBe("NNRO2600007");
-    expect(formatHblNo(fromManila(2027, 1, 1), 12345)).toBe("NNRO2712345");
+  it("formats HBL No. the NNR way: NNRMNL + destination + F/L + running number", () => {
+    expect(formatHblNo("TYO", "FCL", 9904)).toBe("NNRMNLTYOF9904");
+    expect(formatHblNo("BKK", "LCL", 12345)).toBe("NNRMNLBKKL12345");
+    expect(formatHblNo("SIN", "FCL", 7)).toBe("NNRMNLSINF0007");
   });
 
   it("uses the Manila calendar, not UTC, for the month", () => {
@@ -33,10 +34,13 @@ describe("sequence allocation", () => {
     expect(await nextJobNo(prisma, nov)).toBe("EX-O-2611-0001");
   });
 
-  it("HBL sequence does not reset monthly, but does yearly", async () => {
-    expect(await nextHblNo(prisma, fromManila(2026, 10, 1))).toBe("NNRO2600001");
-    expect(await nextHblNo(prisma, fromManila(2026, 11, 1))).toBe("NNRO2600002");
-    expect(await nextHblNo(prisma, fromManila(2027, 1, 1))).toBe("NNRO2700001");
+  it("HBL sequence is one running number that never resets", async () => {
+    // One running number for all destinations and years, continuing after HBL_START_AFTER.
+    process.env.HBL_START_AFTER = "9903";
+    expect(await nextHblNo(prisma, "TYO", "FCL")).toBe("NNRMNLTYOF9904");
+    expect(await nextHblNo(prisma, "BKK", "LCL")).toBe("NNRMNLBKKL9905");
+    expect(await nextHblNo(prisma, "TYO", "FCL")).toBe("NNRMNLTYOF9906");
+    delete process.env.HBL_START_AFTER;
   });
 
   it("never hands out duplicates under concurrency", { timeout: 60_000 }, async () => {

@@ -32,6 +32,11 @@ export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId
     carrierName: "Maersk",
     carrierBookingRef: null,
     carrierRemarks: null,
+    arrastreCutoffAt: null,
+    podCode: "LAX",
+    declarationBy: "NNR",
+    declarationBroker: null,
+    partOfHblNo: null,
     ...o,
   };
 }

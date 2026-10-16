@@ -15,7 +15,7 @@ const MAX_LINES = 25;
 export async function loadReportShipments(db: PrismaClient, where: Prisma.ShipmentWhereInput): Promise<ExportShipment[]> {
   return db.shipment.findMany({
     where,
-    include: { shipper: { select: { name: true } }, assignedCs: { select: { name: true } } },
+    include: { shipper: { select: { name: true } }, assignedCs: { select: { name: true, email: true } } },
     orderBy: { jobNo: "asc" },
   });
 }

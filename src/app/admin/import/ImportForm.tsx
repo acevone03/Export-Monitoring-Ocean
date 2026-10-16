@@ -3,7 +3,7 @@
 import { useActionState, useMemo } from "react";
 import { importAction, type ImportState } from "./actions";
 
-export function ImportForm() {
+export function ImportForm({ defaultHistory }: { defaultHistory: string }) {
   const [state, action, pending] = useActionState<ImportState, FormData>(importAction, {});
   const r = state.result;
   const errorsHref = useMemo(
@@ -14,12 +14,27 @@ export function ImportForm() {
   return (
     <div className="space-y-4">
       <form action={action} className="card space-y-3">
-        <input type="file" name="file" accept=".xlsx" required className="block text-sm" />
+        <input type="file" name="file" accept=".xlsx,.csv" required className="block text-sm" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="label">Import as closed history if booked before</span>
+            <input type="date" name="historyBefore" defaultValue={defaultHistory} className="input" />
+            <span className="text-xs text-slate-500">Old rows are kept for the volume reports but never alert. Clear it to import everything as open.</span>
+          </label>
+          <label className="block text-sm">
+            <span className="label">Year of the first rows (dates like 04-Apr)</span>
+            <input name="startYear" inputMode="numeric" placeholder="automatic" className="input" />
+            <span className="text-xs text-slate-500">Blank: chosen so the latest rows land around today.</span>
+          </label>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="dryRun" defaultChecked /> Check only (nothing is saved)
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="createShippers" defaultChecked /> Add shippers that are not in the shipper list yet
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="mergeShippers" defaultChecked /> Treat shipper names one typo apart as the same shipper (e.g. ACME TRADNG = ACME TRADING); the merges are listed
         </label>
         <button className="btn" disabled={pending}>{pending ? "Working…" : "Upload"}</button>
         {state.error && <p className="text-sm text-red-700" role="alert">{state.error}</p>}
@@ -34,6 +49,11 @@ export function ImportForm() {
             </p>
           ) : (
             <>
+              <p className="text-sm text-slate-600">
+                Layout: {r.layout === "nnr" ? "NNR monitoring sheet" : "template"}
+                {r.startYear && <> · first rows read as {r.startYear}</>}
+                {" · "}{r.history} as closed history · {r.cancelled} cancelled
+              </p>
               <div className="grid gap-3 sm:grid-cols-4">
                 <Stat label="Rows read" value={r.total} />
                 <Stat label={r.dryRun ? "Ready to import" : "Imported"} value={r.imported} tone="green" />
@@ -43,6 +63,12 @@ export function ImportForm() {
               {r.dryRun && r.errors.length === 0 && r.imported > 0 && <p className="text-sm text-green-800">All rows are valid. Untick "Check only" and upload again to import.</p>}
               {r.createdShippers.length > 0 && (
                 <p className="text-sm">{r.dryRun ? "Shippers that will be added" : "Shippers added"}: {r.createdShippers.join(", ")}</p>
+              )}
+              {r.mergedShippers.length > 0 && (
+                <details className="text-sm" open={r.dryRun}>
+                  <summary className="cursor-pointer">Shipper names merged ({r.mergedShippers.length}): check these</summary>
+                  <ul className="ml-4 list-disc">{r.mergedShippers.map((m) => <li key={m.from}>{m.from} → <b>{m.to}</b> ({m.rows} row{m.rows === 1 ? "" : "s"})</li>)}</ul>
+                </details>
               )}
               {r.unknownHeaders.length > 0 && <p className="text-sm text-slate-600">Ignored columns: {r.unknownHeaders.join(", ")}</p>}
               {r.skipped.length > 0 && (
@@ -54,7 +80,7 @@ export function ImportForm() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-3">
                     <h3 className="font-medium text-red-800">Rows to fix ({r.errors.length})</h3>
-                    {errorsHref && <a href={errorsHref} download="rows-to-fix.xlsx" className="btn-secondary py-1">Download rows to fix (.xlsx)</a>}
+                    {errorsHref && <a href={errorsHref} download="rows-to-fix.xlsx" className="btn-secondary py-1">Download rows to fix (.xlsx, same layout: fix and upload it)</a>}
                   </div>
                   <div className="max-h-96 overflow-auto rounded border border-red-200">
                     <table className="min-w-full text-sm">

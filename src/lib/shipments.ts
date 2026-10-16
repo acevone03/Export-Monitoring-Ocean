@@ -57,7 +57,7 @@ export async function createShipment(
   return db.$transaction(async (tx) => {
     // Numbers first: the counter UPDATE takes the write lock up front (see numbering.ts).
     const jobNo = await nextJobNo(tx, opts.now);
-    const hblNo = await nextHblNo(tx, opts.now);
+    const hblNo = await nextHblNo(tx, input.podCode, input.cargoType);
     await assertAssignable(tx, input.shipperId, input.assignedCsId);
     const rules = await loadRules(tx);
 
@@ -87,6 +87,7 @@ const EDITABLE: Array<keyof ShipmentInput> = [
   "shipperId", "consigneeName", "destinationPort", "pod", "cargoType", "containerPlan", "lclQty", "lclUnit",
   "requestedPickupAt", "fsiCutoffAt", "preadviseCutoffAt", "etdMnl", "eta", "arrastreResponsibility",
   "carrierName", "carrierBookingRef", "carrierRemarks", "assignedCsId",
+  "arrastreCutoffAt", "podCode", "declarationBy", "declarationBroker", "partOfHblNo",
 ];
 
 const comparable = (v: unknown) =>

@@ -22,12 +22,15 @@ const events = (id: string) => prisma.milestoneEvent.findMany({ where: { shipmen
 
 describe("createShipment", () => {
   it("assigns Job No. and HBL No., derives status, logs events", async () => {
-    const s = await createShipment(prisma, { ...base(), requestedPickupAt: at(5 * HOUR), fsiCutoffAt: at(2 * DAY), etdMnl: at(4 * DAY) }, cs, { now });
+    const s0 = await createShipment(prisma, { ...base(), requestedPickupAt: at(5 * HOUR), fsiCutoffAt: at(2 * DAY), etdMnl: at(4 * DAY) }, cs, { now });
+    const withCutoff = await createShipment(prisma, { ...base(), arrastreCutoffAt: at(3 * DAY) }, cs, { now });
+    expect(withCutoff.arrastreDeadlineAt?.getTime()).toBe(at(3 * DAY).getTime());
+    const s = s0;
     expect(s.jobNo).toMatch(/^EX-O-2610-\d{4}$/);
-    expect(s.hblNo).toMatch(/^NNRO26\d{5}$/);
+    expect(s.hblNo).toMatch(/^NNRMNLLAXF\d{4,}$/); // destination LAX, FCL
     expect(s.status).toBe("PICKUP_SCHEDULED");
     expect(s.bocDeadlineAt?.getTime()).toBe(at(2 * DAY - DAY).getTime()); // FSI cut-off - 24h
-    expect(s.arrastreDeadlineAt?.getTime()).toBe(at(3 * DAY).getTime()); // ETD - 24h
+    expect(s.arrastreDeadlineAt).toBeNull(); // no arrastre cut-off entered yet
     expect((await events(s.id)).map((e) => e.type)).toEqual(["CREATED", "NUMBERS_ASSIGNED", "PICKUP_SCHEDULED"]);
   });
 
@@ -153,12 +156,12 @@ describe("editHblNo", () => {
   it("is supervisor-only, audited, and never reuses a retired number", async () => {
     const a = await createShipment(prisma, base(), cs, { now });
     const old = a.hblNo!;
-    await expect(editHblNo(prisma, a.id, "NNRO2699999", "typo", cs, { now })).rejects.toThrow(/supervisor/);
-    await editHblNo(prisma, a.id, "NNRO2699999", "Carrier requested", sup, { now });
+    await expect(editHblNo(prisma, a.id, "NNRMNLLAXF99999", "typo", cs, { now })).rejects.toThrow(/supervisor/);
+    await editHblNo(prisma, a.id, "NNRMNLLAXF99999", "Carrier requested", sup, { now });
     const e = (await events(a.id)).at(-1)!;
     expect(e).toMatchObject({ type: "HBL_EDITED", note: "Carrier requested" });
     const b = await createShipment(prisma, base(), cs, { now });
     await expect(editHblNo(prisma, b.id, old, "reuse", sup, { now })).rejects.toThrow(/cannot be reused/);
-    await expect(editHblNo(prisma, b.id, "NNRO2699999", "dup", sup, { now })).rejects.toThrow(/already uses/);
+    await expect(editHblNo(prisma, b.id, "NNRMNLLAXF99999", "dup", sup, { now })).rejects.toThrow(/already uses/);
   });
 });

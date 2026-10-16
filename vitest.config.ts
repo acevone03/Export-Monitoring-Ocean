@@ -9,6 +9,7 @@ export default defineConfig({
     // DB tests share one SQLite file; run files sequentially.
     fileParallelism: false,
     globalSetup: ["tests/global-setup.ts"],
+    setupFiles: ["tests/reset-db.ts"],
     env: { DATABASE_URL: "file:./test.db?connection_limit=1" },
   },
 });

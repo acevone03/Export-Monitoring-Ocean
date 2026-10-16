@@ -55,6 +55,7 @@ export default async function ShipmentPage({
   if (!s) notFound();
 
   const now = await clockNow();
+  const parent = s.partOfHblNo ? await prisma.shipment.findUnique({ where: { hblNo: s.partOfHblNo }, select: { id: true } }) : null;
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
@@ -76,12 +77,12 @@ export default async function ShipmentPage({
 
       <header className="flex flex-wrap items-start gap-x-6 gap-y-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Job No.</p>
-          <h1 className="font-mono text-2xl font-semibold">{s.jobNo}</h1>
+          <p className="text-xs uppercase tracking-wide text-slate-500">HBL No.</p>
+          <h1 className="font-mono text-2xl font-semibold">{s.hblNo ?? (/DIRECT BL/i.test(s.carrierRemarks ?? "") ? "DIRECT BL" : "(no HBL)")}</h1>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">HBL No.</p>
-          <p className="font-mono text-2xl">{s.hblNo}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Job No.</p>
+          <p className="font-mono text-2xl text-slate-600">{s.jobNo}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
@@ -120,15 +121,27 @@ export default async function ShipmentPage({
             <Row k="Destination" v={s.destinationPort} />
             <Row k="POD" v={s.pod} />
             <Row k="Cargo" v={cargo} />
-            <Row k="Carrier" v={s.carrierName} />
-            <Row k="Booking ref" v={s.carrierBookingRef} mono />
-            <Row k="Carrier remarks" v={s.carrierRemarks} />
+            <Row k="Shipping line / co-loader" v={s.carrierName} />
+            <Row k="Booking no." v={s.carrierBookingRef} mono />
+            <Row k="Remarks" v={s.carrierRemarks} />
             <Row k="Requested pick-up" v={formatDateTime(s.requestedPickupAt)} />
             <Row k="FSI cut-off" v={formatDateTime(s.fsiCutoffAt)} />
             <Row k="Pre-advise cut-off" v={formatDateTime(s.preadviseCutoffAt)} />
+            <Row k="Arrastre cut-off" v={s.arrastreResponsibility === "NNR" ? formatDateTime(s.arrastreCutoffAt) : "n/a (shipper)"} />
             <Row k="ETD MNL" v={formatDateTime(s.etdMnl)} />
             <Row k="ETA" v={formatDateTime(s.eta)} />
             <Row k="Arrastre by" v={s.arrastreResponsibility === "NNR" ? "NNR" : "Shipper"} />
+            <Row k="Declaration c/o" v={`${s.declarationBy === "NNR" ? "NNR" : "Shipper"}${s.declarationBroker ? ` (${s.declarationBroker})` : ""}`} />
+            <Row k="HBL destination code" v={s.podCode} mono />
+            {s.partOfHblNo && (
+              <>
+                <dt className="text-slate-500">Part of HBL</dt>
+                <dd className="font-mono">
+                  {parent ? <Link href={`/shipments/${parent.id}`} className="text-blue-700 hover:underline">{s.partOfHblNo}</Link> : s.partOfHblNo}
+                </dd>
+              </>
+            )}
+            {s.exportDocsToCarrierAt && <Row k="Docs sent to carrier" v={formatDateTime(s.exportDocsToCarrierAt)} />}
             <Row k="Assigned CS" v={s.assignedCs.name} />
             <dt className="text-slate-500">Source</dt>
             <dd>
@@ -173,7 +186,7 @@ export default async function ShipmentPage({
             {open && <TimedAction s={s} kind="BOC_UPLOADED" button="Mark uploaded" />}
           </Step>
           {s.arrastreResponsibility === "NNR" ? (
-            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} passive={moot} rule="ETD − 24h" keepOpen revert={rv("ARRASTRE_PAID")}>
+            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} passive={moot} rule="arrastre cut-off" keepOpen revert={rv("ARRASTRE_PAID")}>
               {s.arrastreProof && (
                 <a className="text-sm text-blue-700 hover:underline" href={`/api/attachments/${s.arrastreProof.id}`} target="_blank">
                   View proof ({s.arrastreProof.originalName})

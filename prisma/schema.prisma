@@ -35,6 +35,12 @@ enum ArrastreResponsibility {
   SHIPPER
 }
 
+// Who files the export declaration ("C/O NNR" / "C/O SHIPPER" in the monitoring sheet).
+enum DeclarationBy {
+  NNR
+  SHIPPER
+}
+
 enum DeclarationStatus {
   PENDING
   FILED
@@ -160,6 +166,10 @@ model Shipment {
   // Ocean export only (see DECISIONS.md). No mode field; numbering formats carry the "O".
   jobNo String  @unique
   hblNo String? @unique // assigned on confirmation, never reused
+  // Destination code used in the HBL No. (e.g. TYO in NNRMNLTYOF9904).
+  podCode String?
+  // "PART OF 8665" in the sheet: the HBL No. this split shipment belongs with.
+  partOfHblNo String?
 
   carrierBookingRef String?
 
@@ -195,6 +205,11 @@ model Shipment {
   exportDocsSentAt DateTime?
   exportDocsRecipient String?
   exportDocsSubject   String?
+  // [ASSUMPTION] the unlabelled second "date sent" column in the sheet = docs sent to carrier.
+  exportDocsToCarrierAt DateTime?
+  arrastreCutoffAt     DateTime? // terminal's arrastre cut-off, entered by CS
+  declarationBy        DeclarationBy @default(NNR)
+  declarationBroker    String?       // e.g. "AAI" from "C/O NNR (AAI)"
 
   // Computed from deadline_rules by the engine and cached here for querying.
   bocDeadlineAt      DateTime?
@@ -214,6 +229,8 @@ model Shipment {
   cancelReason String?
 
   // Flags written by the alert engine (not statuses).
+  // Old rows brought in from the spreadsheet as closed history: counted in volumes, not in on-time metrics.
+  importedAsHistory Boolean @default(false)
   atRisk  Boolean @default(false)
   overdue Boolean @default(false)
 

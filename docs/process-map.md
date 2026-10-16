@@ -33,7 +33,7 @@ flowchart TD
   D5(["⏰ FSI cut-off"]) -.- S5
   D6(["⏰ pre-advise cut-off"]) -.- S6
   D8(["⏰ FSI cut-off − 24h"]) -.- S8
-  D9(["⏰ ETD − 24h"]) -.- S9
+  D9(["⏰ arrastre cut-off"]) -.- S9
 
   classDef deadline fill:#fef3c7,stroke:#d97706,color:#78350f
   classDef stop fill:#e2e8f0,stroke:#64748b,color:#0f172a

@@ -6,6 +6,7 @@ const ship = (o: Partial<DeadlineShipment> = {}): DeadlineShipment => ({
   fsiCutoffAt: new Date("2026-10-21T08:00:00Z"),
   preadviseCutoffAt: new Date("2026-10-22T08:00:00Z"),
   etdMnl: new Date("2026-10-24T04:00:00Z"),
+  arrastreCutoffAt: new Date("2026-10-23T05:00:00Z"),
   arrastreResponsibility: "NNR",
   ...o,
 });
@@ -16,8 +17,9 @@ describe("deadline computation", () => {
     expect(computeDueAt(rule("BOC_UPLOAD"), ship())?.toISOString()).toBe("2026-10-20T08:00:00.000Z");
   });
 
-  it("arrastre = ETD - 24h by default", () => {
-    expect(computeDueAt(rule("ARRASTRE"), ship())?.toISOString()).toBe("2026-10-23T04:00:00.000Z");
+  it("arrastre = the arrastre cut-off entered by CS", () => {
+    expect(computeDueAt(rule("ARRASTRE"), ship())?.toISOString()).toBe("2026-10-23T05:00:00.000Z");
+    expect(computeDueAt(rule("ARRASTRE"), ship({ arrastreCutoffAt: null }))).toBeNull();
   });
 
   it("skips arrastre unless NNR is responsible", () => {
@@ -41,6 +43,6 @@ describe("deadline computation", () => {
   it("computes both cached deadlines", () => {
     const r = computeCachedDeadlines(DEFAULT_RULES, ship());
     expect(r.bocDeadlineAt?.toISOString()).toBe("2026-10-20T08:00:00.000Z");
-    expect(r.arrastreDeadlineAt?.toISOString()).toBe("2026-10-23T04:00:00.000Z");
+    expect(r.arrastreDeadlineAt?.toISOString()).toBe("2026-10-23T05:00:00.000Z");
   });
 });

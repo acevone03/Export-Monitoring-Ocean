@@ -35,6 +35,11 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     carrierBookingRef: s.carrierBookingRef ?? "",
     carrierRemarks: s.carrierRemarks ?? "",
     assignedCsId: s.assignedCsId,
+    arrastreCutoffAt: toManilaInput(s.arrastreCutoffAt),
+    podCode: s.podCode ?? "",
+    declarationBy: s.declarationBy,
+    declarationBroker: s.declarationBroker ?? "",
+    partOfHblNo: s.partOfHblNo ?? "",
   };
 }
 

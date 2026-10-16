@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import type { FieldErrors } from "@/lib/shipment-input";
+import { podCodeFor } from "@/lib/pod-codes";
 
 // `values` echoes the submitted fields on error: React 19 resets the form after an
 // action, and uncontrolled fields reset to their defaultValue, so we feed it back.
@@ -29,6 +30,11 @@ export type ShipmentFormValues = {
   carrierBookingRef: string;
   carrierRemarks: string;
   assignedCsId: string;
+  arrastreCutoffAt: string;
+  podCode: string;
+  declarationBy: "NNR" | "SHIPPER";
+  declarationBroker: string;
+  partOfHblNo: string;
 };
 
 type Props = {
@@ -54,6 +60,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
   const [shipperName, setShipperName] = useState(shippers.find((s) => s.id === initial.shipperId)?.name ?? initialShipperName ?? "");
   const [shipperId, setShipperId] = useState(initial.shipperId);
   const [arrastre, setArrastre] = useState(initial.arrastreResponsibility);
+  // HBL destination code follows the destination/POD until CS types their own.
+  const [podCode, setPodCode] = useState(initial.podCode || podCodeFor(initial.pod) || podCodeFor(initial.destinationPort) || "");
+  const [podTouched, setPodTouched] = useState(!!initial.podCode && !isNew);
+  const suggestCode = (form: HTMLFormElement | null) => {
+    if (podTouched || !form || !isNew) return;
+    const pod = (form.elements.namedItem("pod") as HTMLInputElement | null)?.value;
+    const dest = (form.elements.namedItem("destinationPort") as HTMLInputElement | null)?.value;
+    setPodCode(podCodeFor(pod) || podCodeFor(dest) || "");
+  };
   const [arrastreTouched, setArrastreTouched] = useState(!isNew);
   const [cargoType, setCargoType] = useState(initial.cargoType);
   const [containers, setContainers] = useState<Container[]>(
@@ -106,10 +121,27 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
           <input className="input" name="consigneeName" defaultValue={v("consigneeName")} />
         </Field>
         <Field label="Destination" error={err.destinationPort} flag={flags.destinationPort} span={2}>
-          <input className="input" name="destinationPort" list="dest-list" defaultValue={v("destinationPort")} placeholder="e.g. USLAX Los Angeles" required autoComplete="off" />
+          <input className="input" name="destinationPort" list="dest-list" defaultValue={v("destinationPort")} placeholder="e.g. TOKYO or JPTYO Tokyo" required autoComplete="off" onChange={(e) => suggestCode(e.currentTarget.form)} />
         </Field>
         <Field label="Port of discharge" error={err.pod} flag={flags.pod} span={2}>
-          <input className="input" name="pod" list="dest-list" defaultValue={v("pod")} placeholder="e.g. USLGB Long Beach" required autoComplete="off" />
+          <input className="input" name="pod" list="dest-list" defaultValue={v("pod")} placeholder="e.g. USLGB Long Beach" required autoComplete="off" onChange={(e) => suggestCode(e.currentTarget.form)} />
+        </Field>
+        <Field label="HBL destination code" error={err.podCode} flag={flags.podCode}>
+          <input
+            className="input font-mono uppercase"
+            name="podCode"
+            value={podCode}
+            maxLength={3}
+            placeholder="e.g. TYO"
+            onChange={(e) => {
+              setPodCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""));
+              setPodTouched(true);
+            }}
+          />
+          <p className="mt-1 text-xs text-slate-500">{isNew ? "Used in the HBL No. (NNRMNL" + (podCode || "___") + "F…)." : "Changing it does not change the issued HBL No."}</p>
+        </Field>
+        <Field label="Part of HBL (split shipment, optional)" error={err.partOfHblNo}>
+          <input className="input font-mono uppercase" name="partOfHblNo" defaultValue={v("partOfHblNo")} placeholder="e.g. NNRMNLNGOF8665" />
         </Field>
         <datalist id="dest-list">
           {destinations.map((d) => <option key={d} value={d} />)}
@@ -187,6 +219,9 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Pre-advise cut-off" error={err.preadviseCutoffAt}>
           <input className="input" type="datetime-local" name="preadviseCutoffAt" defaultValue={v("preadviseCutoffAt")} />
         </Field>
+        <Field label="Arrastre cut-off" error={err.arrastreCutoffAt}>
+          <input className="input" type="datetime-local" name="arrastreCutoffAt" defaultValue={v("arrastreCutoffAt")} />
+        </Field>
         <Field label="ETD MNL" error={err.etdMnl}>
           <input className="input" type="datetime-local" name="etdMnl" defaultValue={v("etdMnl")} />
         </Field>
@@ -196,13 +231,13 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       </Section>
 
       <Section title="Carrier">
-        <Field label="Carrier" error={err.carrierName}>
+        <Field label="Shipping line / co-loader" error={err.carrierName}>
           <input className="input" name="carrierName" defaultValue={v("carrierName")} />
         </Field>
-        <Field label="Carrier booking ref" error={err.carrierBookingRef}>
+        <Field label="Booking no." error={err.carrierBookingRef}>
           <input className="input" name="carrierBookingRef" defaultValue={v("carrierBookingRef")} />
         </Field>
-        <Field label="Carrier remarks" error={err.carrierRemarks} span={2}>
+        <Field label="Remarks" error={err.carrierRemarks} span={2}>
           <input className="input" name="carrierRemarks" defaultValue={v("carrierRemarks")} />
         </Field>
       </Section>
@@ -221,6 +256,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             <option value="NNR">NNR</option>
             <option value="SHIPPER">Shipper</option>
           </select>
+        </Field>
+        <Field label="Export declaration c/o" error={err.declarationBy}>
+          <select className="input" name="declarationBy" defaultValue={v("declarationBy") || "NNR"}>
+            <option value="NNR">NNR</option>
+            <option value="SHIPPER">Shipper</option>
+          </select>
+        </Field>
+        <Field label="Declaration broker (optional)" error={err.declarationBroker}>
+          <input className="input" name="declarationBroker" defaultValue={v("declarationBroker")} placeholder="e.g. AAI" />
         </Field>
         <Field label="Assigned CS" error={err.assignedCsId}>
           <select className="input" name="assignedCsId" defaultValue={v("assignedCsId")} required>

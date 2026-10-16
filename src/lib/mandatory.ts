@@ -5,7 +5,8 @@ import type { Shipment } from "@prisma/client";
 // cancelled or closed shipment, and nothing pre-departure is missing after ATD.
 type Check = Pick<
   Shipment,
-  "status" | "requestedPickupAt" | "etdMnl" | "carrierName" | "carrierBookingRef" | "fsiCutoffAt" | "preadviseCutoffAt" | "atdMnl" | "eta"
+  | "status" | "requestedPickupAt" | "etdMnl" | "carrierName" | "carrierBookingRef" | "fsiCutoffAt" | "preadviseCutoffAt" | "atdMnl" | "eta"
+  | "arrastreResponsibility" | "arrastreCutoffAt"
 >;
 
 export function missingMandatory(s: Check): string[] {
@@ -18,6 +19,7 @@ export function missingMandatory(s: Check): string[] {
     if (!s.carrierBookingRef) missing.push("Carrier booking ref");
     if (!s.fsiCutoffAt) missing.push("FSI cut-off");
     if (!s.preadviseCutoffAt) missing.push("Pre-advise cut-off");
+    if (s.arrastreResponsibility === "NNR" && !s.arrastreCutoffAt) missing.push("Arrastre cut-off");
   } else if (!s.eta) {
     missing.push("ETA");
   }

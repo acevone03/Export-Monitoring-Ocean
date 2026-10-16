@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseManilaInput } from "./time";
+import { podCodeFor, POD_CODE_RE } from "./pod-codes";
 
 // Validation for the shipment form (create and edit). Every API boundary that
 // writes shipment fields goes through ShipmentInputSchema.
@@ -60,6 +61,7 @@ export const ShipmentInputSchema = z
     requestedPickupAt: manilaDateTime,
     fsiCutoffAt: manilaDateTime,
     preadviseCutoffAt: manilaDateTime,
+    arrastreCutoffAt: manilaDateTime,
     etdMnl: manilaDateTime,
     eta: manilaDateTime,
     arrastreResponsibility: z.enum(["NNR", "SHIPPER"]),
@@ -67,6 +69,11 @@ export const ShipmentInputSchema = z
     carrierBookingRef: optText(50),
     carrierRemarks: optText(2000),
     assignedCsId: z.string().uuid("Choose the assigned CS"),
+    // HBL destination code (TYO in NNRMNLTYOF9904). Blank: worked out from the destination.
+    podCode: z.string().trim().toUpperCase().max(3),
+    declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
+    declarationBroker: optText(100),
+    partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
   })
   .superRefine((v, ctx) => {
     if (v.cargoType === "FCL") {
@@ -84,13 +91,18 @@ export const ShipmentInputSchema = z
     if (v.etdMnl && v.eta && v.eta <= v.etdMnl) {
       ctx.addIssue({ code: "custom", path: ["eta"], message: "ETA must be after ETD" });
     }
+    const code = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort);
+    if (!code || !POD_CODE_RE.test(code)) {
+      ctx.addIssue({ code: "custom", path: ["podCode"], message: "Enter the 3-letter HBL destination code (e.g. TYO)" });
+    }
   })
   // Drop the fields that do not apply to the chosen cargo type.
-  .transform((v) =>
-    v.cargoType === "FCL"
-      ? { ...v, lclQty: null, lclUnit: null }
-      : { ...v, containerPlan: [] as ContainerPlan },
-  );
+  .transform((v) => {
+    const podCode = (v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort))!;
+    return v.cargoType === "FCL"
+      ? { ...v, podCode, lclQty: null, lclUnit: null }
+      : { ...v, podCode, containerPlan: [] as ContainerPlan };
+  });
 
 export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
 
@@ -113,6 +125,11 @@ export const SHIPMENT_FORM_KEYS = [
   "carrierBookingRef",
   "carrierRemarks",
   "assignedCsId",
+  "arrastreCutoffAt",
+  "podCode",
+  "declarationBy",
+  "declarationBroker",
+  "partOfHblNo",
 ] as const;
 
 export type FieldErrors = Partial<Record<string, string>>;

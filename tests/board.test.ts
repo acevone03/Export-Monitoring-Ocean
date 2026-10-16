@@ -13,7 +13,7 @@ const ship = (o: Partial<Shipment> = {}): Shipment =>
     arrastreResponsibility: "NNR", atdMnl: null, etdMnl: h(72),
     requestedPickupAt: h(24), actualPickupAt: null, fsiCutoffAt: h(48), fsiSubmittedAt: null,
     preadviseCutoffAt: h(50), preadviseSentAt: null, bocDeadlineAt: h(24), bocUploadAt: null,
-    arrastreDeadlineAt: h(48), arrastrePaidAt: null, carrierName: "Maersk", carrierBookingRef: "X", eta: null,
+    arrastreDeadlineAt: h(48), arrastreCutoffAt: h(48), arrastrePaidAt: null, carrierName: "Maersk", carrierBookingRef: "X", eta: null,
     assignedCsId: "cs", createdById: "cs",
     ...o,
   }) as Shipment;

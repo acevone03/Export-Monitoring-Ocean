@@ -9,6 +9,7 @@ const LABEL: Record<string, string> = {
 };
 const FIELD_LABEL: Record<string, string> = {
   requestedPickupAt: "Requested pick-up", fsiCutoffAt: "FSI cut-off", preadviseCutoffAt: "Pre-advise cut-off", etdMnl: "ETD MNL",
+  arrastreCutoffAt: "Arrastre cut-off",
 };
 const ORDER = ["PICKUP", "FSI", "PREADVISE", "BOC_UPLOAD", "ARRASTRE"];
 

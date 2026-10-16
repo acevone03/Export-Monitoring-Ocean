@@ -8,6 +8,7 @@ import { manilaMonth, within, type Period } from "./period";
 // Definitions (see DECISIONS.md, Step 6):
 // - Shipment totals: shipments created (Job No. issued) in the month. Cancelled are counted
 //   separately and left out of the breakdowns.
+// - Rows imported as closed history count in volumes and actual-date averages, not in deadline metrics.
 // - A deadline belongs to the month in which it falls due. On time = completed at or before
 //   the due time. Missed = completed late, or still open after the due time. Deadlines not yet
 //   due are left out of the rate. Cancelled shipments are left out entirely.
@@ -59,6 +60,9 @@ export function buildMonthlyReport(shipments: ExportShipment[], month: string, n
   const created = shipments.filter((s) => within(s.createdAt, period));
   const active = created.filter((s) => s.status !== "CANCELLED");
   const live = shipments.filter((s) => s.status !== "CANCELLED");
+  // Rows imported as history never had their steps tracked in the app (the old sheet has no
+  // "FSI submitted" etc.), so they would show as missed: keep them out of deadline metrics.
+  const tracked = live.filter((s) => !s.importedAsHistory);
 
   const containers: Record<string, number> = {};
   for (const s of active.filter((x) => x.cargoType === "FCL")) {
@@ -69,7 +73,7 @@ export function buildMonthlyReport(shipments: ExportShipment[], month: string, n
   const missed: MissedDeadline[] = [];
   for (const def of DEADLINE_DEFS) {
     const row = { deadline: def.label, onTime: 0, late: 0, openOverdue: 0, total: 0, rate: null as number | null };
-    for (const s of live) {
+    for (const s of tracked) {
       const due = def.due(s);
       if (!due || !within(due, period)) continue;
       const done = def.done(s);
@@ -98,7 +102,7 @@ export function buildMonthlyReport(shipments: ExportShipment[], month: string, n
 
   const arrastreDef = DEADLINE_DEFS.find((d) => d.type === ("ARRASTRE" as DeadlineType))!;
   const arrastre = { onTime: 0, late: 0, unpaidOverdue: 0 };
-  for (const s of live) {
+  for (const s of tracked) {
     const due = arrastreDef.due(s);
     if (!due || !within(due, period)) continue;
     if (s.arrastrePaidAt) s.arrastrePaidAt <= due ? arrastre.onTime++ : arrastre.late++;

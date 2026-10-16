@@ -8,7 +8,8 @@ import { buildDailyReport } from "@/lib/reports/daily";
 import { buildMonthlyReport } from "@/lib/reports/monthly";
 import { dailyWorkbook, monthlyWorkbook } from "@/lib/reports/excel";
 import { runDailyReportIfDue } from "@/lib/reports/deliver";
-import { RAW_COLUMNS, type ExportShipment } from "@/lib/columns";
+import type { ExportShipment } from "@/lib/columns";
+import { SHEET_COLUMNS } from "@/lib/nnr-sheet";
 import { fromManila, HOUR, DAY } from "@/lib/time";
 import { prisma, fixtures } from "./helpers";
 
@@ -22,14 +23,15 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
   const { shipperName = "Acme", csName = "Ana", ...rest } = o;
   n++;
   return {
-    id: `s${n}`, jobNo: `EX-O-2610-${String(n).padStart(4, "0")}`, hblNo: `NNRO26${String(n).padStart(5, "0")}`,
+    id: `s${n}`, jobNo: `EX-O-2610-${String(n).padStart(4, "0")}`, hblNo: `NNRMNLLAXF${String(9000 + n)}`,
     status: "PICKUP_SCHEDULED", cargoType: "FCL", containerPlan: [{ size: "40HC", qty: 1 }], lclQty: null, lclUnit: null,
     destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, carrierName: "Maersk", carrierBookingRef: "B1",
     carrierRemarks: null, arrastreResponsibility: "NNR", exportDeclarationStatus: "PENDING",
     requestedPickupAt: t(48), actualPickupAt: null, fsiCutoffAt: t(72), fsiSubmittedAt: null,
     preadviseCutoffAt: t(80), preadviseSentAt: null, bocDeadlineAt: t(48), bocUploadAt: null,
-    arrastreDeadlineAt: t(96), arrastrePaidAt: null, exportDocsSentAt: null,
+    arrastreDeadlineAt: t(96), arrastreCutoffAt: t(96), arrastrePaidAt: null, exportDocsSentAt: null,
     etdMnl: t(120), atdMnl: null, eta: null, ata: null, createdAt: t(-24),
+    declarationBy: "NNR", declarationBroker: null, podCode: "LAX", partOfHblNo: null, exportDocsToCarrierAt: null, importedAsHistory: false,
     shipper: { name: shipperName }, assignedCs: { name: csName },
     ...rest,
   } as ExportShipment;
@@ -111,6 +113,14 @@ describe("monthly report", () => {
     expect(r.missedByShipper).toEqual([{ key: "Bravo", count: 3 }]);
   });
 
+  it("leaves imported history out of the deadline metrics but counts it in volumes", () => {
+    const hist = ship({ createdAt: oct(3), requestedPickupAt: oct(3), actualPickupAt: null, fsiCutoffAt: oct(4), status: "CLOSED", importedAsHistory: true, shipperName: "Old Co" });
+    const r2 = buildMonthlyReport([...rows, hist], "2026-10", now);
+    expect(r2.totals.shipments).toBe(r.totals.shipments + 1);
+    expect(r2.onTime).toEqual(r.onTime);
+    expect(r2.missed).toEqual(r.missed);
+  });
+
   it("averages pick-up delay and pick-up to ATD, and splits arrastre on time vs late", () => {
     expect(r.pickupDelay).toEqual({ count: 3, avgHours: 0.7 }); // (-1 + 3 + 0) / 3
     expect(r.pickupToAtd).toEqual({ count: 1, avgHours: 97 }); // 2 Oct 08:00 -> 6 Oct 09:00
@@ -126,9 +136,18 @@ describe("Excel exports", () => {
     await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
     expect(wb.worksheets.map((w) => w.name)).toEqual(["Daily report", "Raw data"]);
     const raw = wb.getWorksheet("Raw data")!;
-    expect((raw.getRow(1).values as unknown[]).slice(1)).toEqual(RAW_COLUMNS.map((c) => c.header));
-    const col = RAW_COLUMNS.findIndex((c) => c.header === "Requested Pick-up") + 1;
-    const cell = raw.getRow(2).getCell(col);
+    // Same three header rows as NNR's monitoring sheet
+    expect(raw.getRow(1).getCell(1).value).toBe("HBL NO.");
+    expect(raw.getRow(2).getCell(5).value).toBe("ETD MNL");
+    expect(raw.getRow(3).getCell(9).value).toBe("40FT");
+    expect(raw.getRow(3).getCell(14).value).toBe("FSI");
+    expect(raw.getRow(3).getCell(16).value).toBe("ARRASTRE");
+    expect(raw.getRow(3).getCell(18).value).toBe("C/O NNR");
+    expect(raw.getRow(1).getCell(SHEET_COLUMNS.length + 2).value).toBe("JOB NO.");
+    expect(raw.getRow(4).getCell(9).value).toBe("1X40HC");
+    expect(raw.getRow(4).getCell(17).value).toBe("N/A"); // declaration c/o NNR, so shipper column N/A
+    const col = SHEET_COLUMNS.findIndex((c) => c.key === "reqPickup") + 1;
+    const cell = raw.getRow(4).getCell(col);
     expect(cell.value).toEqual(new Date(Date.UTC(2026, 9, 17, 9, 30))); // wall-clock 09:30, as Excel shows it
     expect(cell.numFmt).toBe("dd-mmm-yyyy hh:mm");
   });

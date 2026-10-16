@@ -25,6 +25,7 @@ export default async function NewShipmentPage() {
           requestedPickupAt: "", fsiCutoffAt: "", preadviseCutoffAt: "", etdMnl: "", eta: "",
           arrastreResponsibility: "NNR", carrierName: "", carrierBookingRef: "", carrierRemarks: "",
           assignedCsId: user.role === "CS" ? user.id : "",
+          arrastreCutoffAt: "", podCode: "", declarationBy: "NNR", declarationBroker: "", partOfHblNo: "",
         }}
       />
     </div>

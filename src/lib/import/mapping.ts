@@ -4,7 +4,7 @@
 
 export const IMPORT_FIELDS = [
   { key: "jobNo", headers: ["Job No.", "Job No", "Booking No.", "Booking No", "Booking No. (manual)"], note: "Kept if it is a valid EX-O-YYMM-#### number not already used; otherwise a new Job No. is issued and the old one is kept on the timeline." },
-  { key: "hblNo", headers: ["HBL No.", "HBL No", "HBL"], note: "Kept as is (already given to customers). Blank: a new HBL No. is issued." },
+  { key: "hblNo", headers: ["HBL No.", "HBL No", "HBL"], note: "Kept as is (already given to customers). `NNRMNLNGOF8687 / PART OF 8665` links a split shipment. Blank: a new HBL No. is issued." },
   { key: "shipper", headers: ["Shipper"], required: true, note: "Matched to the shipper list ignoring punctuation and Inc/Corp/Co. Unknown shippers are created (option) or reported." },
   { key: "consignee", headers: ["Consignee"] },
   { key: "destination", headers: ["Destination", "Destination Port"], required: true },
@@ -18,6 +18,7 @@ export const IMPORT_FIELDS = [
   { key: "fsiSubmitted", headers: ["FSI Submitted"] },
   { key: "preadviseCutoff", headers: ["Pre-advise Cut-off", "Preadvise Cut-off", "Pre-advise Cutoff"] },
   { key: "preadviseSent", headers: ["Pre-advise Sent", "Preadvise Sent"] },
+  { key: "arrastreCutoff", headers: ["Arrastre Cut-off", "Arrastre Cutoff"] },
   { key: "declaration", headers: ["Export Declaration", "Export Decl.", "Declaration"], note: "PENDING, FILED, ASSESSED or RELEASED. Blank: PENDING." },
   { key: "bocUploaded", headers: ["BOC Uploaded", "BOC Upload"] },
   { key: "arrastreBy", headers: ["Arrastre By", "Arrastre"], note: "NNR or SHIPPER. Blank: the shipper's default." },

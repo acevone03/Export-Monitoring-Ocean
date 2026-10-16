@@ -7,7 +7,9 @@ const FIELD_LABEL: Record<string, string> = {
   cargoType: "Cargo type", containerPlan: "Containers", lclQty: "LCL qty", lclUnit: "LCL unit",
   requestedPickupAt: "Requested pick-up", fsiCutoffAt: "FSI cut-off", preadviseCutoffAt: "Pre-advise cut-off",
   etdMnl: "ETD MNL", eta: "ETA", arrastreResponsibility: "Arrastre", carrierName: "Carrier",
-  carrierBookingRef: "Carrier booking ref", carrierRemarks: "Carrier remarks", assignedCsId: "Assigned CS",
+  carrierBookingRef: "Booking no.", carrierRemarks: "Remarks", assignedCsId: "Assigned CS",
+  arrastreCutoffAt: "Arrastre cut-off", podCode: "HBL destination code", declarationBy: "Declaration c/o",
+  declarationBroker: "Declaration broker", partOfHblNo: "Part of HBL",
 };
 
 const when = (iso: unknown) => (typeof iso === "string" && /^\d{4}-\d{2}-\d{2}T/.test(iso) ? formatDateTime(new Date(iso)) : String(iso ?? "—"));

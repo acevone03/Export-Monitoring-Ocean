@@ -7,6 +7,7 @@
 import { PrismaClient, Prisma, type CargoType, type ArrastreResponsibility, type DeclarationStatus } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
 import { nextJobNo, nextHblNo } from "../src/lib/numbering";
+import { podCodeFor } from "../src/lib/pod-codes";
 import { deriveStatus } from "../src/lib/status";
 import { DEFAULT_RULES, computeCachedDeadlines } from "../src/lib/deadlines";
 import { EVENT } from "../src/lib/milestones";
@@ -154,6 +155,8 @@ async function main() {
       arrastrePaidAt: s.arrastrePaidAt ?? null,
       exportDocsSentAt: s.exportDocsSentAt ?? null,
       etdMnl: s.etdMnl ?? null,
+      // Demo: terminal arrastre cut-off one day before ETD when NNR pays arrastre.
+      arrastreCutoffAt: s.arrastre === "NNR" && s.etdMnl ? new Date(s.etdMnl.getTime() - DAY) : null,
       atdMnl: s.atdMnl ?? null,
       eta: s.eta ?? null,
       ata: s.ata ?? null,
@@ -165,13 +168,15 @@ async function main() {
 
     await prisma.$transaction(async (tx) => {
       const jobNo = await nextJobNo(tx, s.createdAt);
-      const hblNo = await nextHblNo(tx, s.createdAt);
+      const podCode = podCodeFor(s.pod) ?? podCodeFor(s.destinationPort) ?? "XXX";
+      const hblNo = await nextHblNo(tx, podCode, s.cargoType);
       const shipment = await tx.shipment.create({
         data: {
           ...fields,
           ...computeCachedDeadlines(rules, fields),
           jobNo,
           hblNo,
+          podCode,
           cargoType: s.cargoType,
           shipperId: shipper.id,
           consigneeName: s.consigneeName,

@@ -36,9 +36,10 @@ Without a key, the page shows a disabled notice and the manual form still works.
 
 ### Moving over from the spreadsheet
 
-Supervisors import the old monitoring spreadsheet at **Import** (`/admin/import`): check first, then import.
+Supervisors import NNR's monitoring sheet (`.xlsx` or `.csv`, as is) at **Import** (`/admin/import`): check first, then import.
+Rows older than the history cut-off (default 30 days) come in as closed history, so they don't raise alerts.
 Rows with problems are listed and downloadable as "rows to fix"; re-uploading is safe.
-Accepted headers and rules: [`docs/import.md`](docs/import.md); a template: `docs/import-template.xlsx`.
+How each column is read: [`docs/import.md`](docs/import.md). The board and the Excel raw sheet use the same columns.
 
 ### Process map
 

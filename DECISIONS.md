@@ -9,7 +9,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 (16-Oct-2026). Consequences:
 
 - No `mode` field. Job No. is `EX-O-{YYMM}-{seq4}` and the house document is always an **HBL**
-  (`NNRO{YY}{seq5}`). The fixed "O" lives in `src/lib/numbering.ts` (`JOB_PREFIX`, `HBL_PREFIX`), so
+  (format: see "NNR's real monitoring sheet" below). The fixed "O" lives in `src/lib/numbering.ts` (`JOB_PREFIX`, `HBL_PREFIX`), so
   air could be re-added later as a second prefix without renumbering existing ocean jobs.
 - `hbl_hawb_no` becomes `hblNo`; `mawb_no` is dropped. `cargo_type` is `FCL | LCL`.
 - **Arrastre still applies to every shipment.** Only the `NA` option (spec: "NA for AIR") is removed, so
@@ -22,7 +22,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 | O1 | What "FSI" means | Treated as **Final Shipping Instruction**. Only UI labels depend on it. | UI labels |
 | O2 | How FSI completion is recorded | Dedicated `fsiSubmittedAt` field, set by a "Mark FSI submitted" button, plus an `FSI_SUBMITTED` milestone event. Same pattern for pre-advise (`preadviseSentAt`). | `prisma/schema.prisma` |
 | O3 | BOC upload deadline rule | `fsiCutoffAt - 24h` (spec default), editable in `deadline_rules`. | `src/lib/deadlines.ts` `DEFAULT_RULES` |
-| O4 | Arrastre deadline rule | `etdMnl - 24h`, only when arrastre = `NNR` (skipped when `SHIPPER`). Editable. | same |
+| O4 | Arrastre deadline rule | `etdMnl - 24h`, only when arrastre = `NNR` (skipped when `SHIPPER`). Editable. *Now: the entered arrastre cut-off (see below).* | same |
 | O5 | Extra notification channel | Telegram stub behind a `Notifier` interface (Step 4). | — |
 | O6 | Mailbox reading / forwarding | Not built. CS pastes email text into `/intake` (Step 7). | — |
 
@@ -30,7 +30,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 
 | # | Item | Implemented as | Where |
 |---|---|---|---|
-| A1 | HBL format | `NNRO{YY}{seq5}`, sequence per **year** (Manila calendar) | `src/lib/numbering.ts` |
+| A1 | HBL format | `NNRO{YY}{seq5}`, sequence per **year** (Manila calendar). *Now `NNRMNL{POD}{F|L}{seq}` (see below).* | `src/lib/numbering.ts` |
 | A2 | Export declaration statuses | `PENDING → FILED → ASSESSED → RELEASED` | `prisma/schema.prisma` enum |
 | A3 | Default reminder/escalation timing | Reminders at -24h, -4h, -1h; overdue at due time then every 2h, max 3/day. Stored per rule. | `DEFAULT_RULES` |
 | A4 | Stack | Next.js 15 (App Router) + Prisma 6 + SQLite + Tailwind 4 + zod + bcryptjs + Vitest | `package.json` |
@@ -126,7 +126,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 2. **Board column order is an [ASSUMPTION]** until the current spreadsheet's headers are confirmed. It is
    one array in `src/app/board-columns.tsx` (Job No., HBL No., Shipper, Destination, POD, Cargo,
    Carrier, Booking ref, Pick-up, FSI, Pre-advise, Export decl., BOC upload, Arrastre, Docs sent,
-   ETD, ATD, ETA, Status, CS, Remarks). The Excel "raw data" sheet (Step 6) will reuse it.
+   ETD, ATD, ETA, Status, CS, Remarks). The Excel "raw data" sheet (Step 6) will reuse it. *Superseded: see "NNR's real monitoring sheet" below.*
 3. **Row colour** = worst open deadline across the five tracked deadlines (`src/lib/deadline-status.ts`):
    red if any is overdue, amber if any is due within 4h, else green. Deadline cells are coloured
    individually and show ✓ + time once done. Closed/cancelled rows are grey.
@@ -338,8 +338,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 
 ## Still open after the MVP
 
-- **Real spreadsheet headers** (board columns, raw Excel sheet, import mapping): all three are single lists
-  marked [ASSUMPTION].
+- **The six questions about NNR's sheet** (end of this file): defaults applied, not yet confirmed.
 - **Live test of AI intake** with a real `ANTHROPIC_API_KEY` (only mocked so far).
 - **Telegram/SMS/Viber** channels are a stub (O5). **Mailbox reading** is not built (O6).
 - **Production hardening** before go-live: HTTPS + `COOKIE_SECURE=true`, `ENABLE_DEV_TOOLS=false`, SMTP,
@@ -359,3 +358,58 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 4. **Order is kept:** revert Close before anything else on a closed shipment, the cancellation before
    anything else on a cancelled one, and the arrival before the departure. Export declaration status
    needs no revert because it can already be set to any value (logged).
+
+## NNR's real monitoring sheet (after Step 8)
+
+NNR shared its monitoring sheet (Oct 2026). The app now follows it. The file itself and any
+real data are **not** in the repository; tests use invented rows under the real headers.
+
+1. **HBL No. = `NNRMNL{POD}{F|L}{seq}`**, e.g. `NNRMNLTYOF9904`: Manila origin, the 3-letter
+   destination code, F (FCL) or L (LCL), then one running number shared by all destinations (never reset
+   by year). `HBL_START_AFTER` in `.env` (9903 = the last number in the sheet) sets where new numbers
+   start; an import also moves the counter past every HBL in the file, including rows with errors.
+2. **Destination code** (`podCode`) is filled from the destination by a city dictionary built from the
+   sheet (`src/lib/pod-codes.ts`, e.g. TOKYO→TYO, PORT KLANG→PKL, LONG BEACH→LAX), else the UN/LOCODE's
+   last 3 letters. CS can overwrite it on the form. An unknown city must be typed.
+3. **The HBL is the main reference** on the board and in exports (first column, sticky). The Job No.
+   (`EX-O-YYMM-####`) is kept for the internal timeline and reports but moved to the end. *(Question 2.)*
+4. **Arrastre cut-off is entered**, like FSI and pre-advise, from the shipping line's advice; the arrastre
+   deadline is that time (rule: `arrastreCutoffAt` + 0h, editable in Rules). It is skipped when the shipper
+   pays, and listed as missing until entered when NNR pays.
+5. **Export declaration "c/o"**: who files it (`NNR` or `SHIPPER`) plus an optional broker. `C/O NNR (AAI)`
+   is read as NNR filing via broker **AAI**. *(Question 3.)*
+6. **Carrier column = shipping line or co-loader** (the sheet mixes both); one text field.
+7. **Column V ("date sent the export documents", 2nd column) = sent to the carrier.** The first is "to
+   customer". *(Question 1.)* Recorded as a new step (`exportDocsToCarrierAt`), shown on the board, no deadline.
+8. **"PART OF 7002"** in the HBL cell = split shipment. The row keeps its own HBL and links to the main
+   one (`partOfHblNo`), shown on both shipment pages. *(Question 4.)*
+9. **"DIRECT BL"** rows get no NNR HBL (the line issues the BL); the text is kept in remarks. They are
+   recognised on re-import by shipper + destination + pick-up + cargo.
+10. **HBLs written `MNL…` (without NNR)** are kept as written. *(Question 6.)*
+11. **Board, raw Excel sheet and import share one column list** (`src/lib/nnr-sheet.ts`) with the sheet's 3
+    header rows; app-only columns (Job No., status, CS, CS email, …) follow after a blank column, so an
+    export re-imports cleanly.
+12. **Dates without a year** (`04-Apr`): rows are in booking order, so each date takes the year nearest the
+    previous row's. The first year is guessed so no date lands more than 120 days ahead, and can be set on
+    the import page. *(Question 5.)* `TBA`, `N/A`, `-` are blank; `15-16 MAY` takes the first day;
+    `11 OCT @ 1200H` gives the time.
+13. **History cut-off** (default 30 days ago): older rows import as **Closed** history. No alerts and
+    no on-time scoring, because the sheet doesn't record when FSI or pre-advise were done, so every old row
+    would count as missed. They still count in monthly volumes. Without this, about 1,100 old rows would
+    have raised alerts at once.
+14. **Shipper names** are matched ignoring spaces and punctuation. Names one typo apart (e.g. `ACME TRADNG`)
+    are merged into the most used spelling. Every merge is listed on the check screen and can be turned off.
+15. **Trial on the real file** (local copy only): 1,295 rows → 1,260 imported (1,126 history, 131 live),
+    35 rows listed to fix (mostly blank destination, cargo or shipper; 3 HBLs used twice; 2 unreadable
+    dates), start year 2025,
+    next HBL after 9903. Re-importing the same file imports 0.
+
+### Open questions (defaults applied, please confirm)
+
+1. Is column V "date sent to **carrier**"? (default: yes)
+2. Keep the internal Job No., with the HBL as the main reference? (default: yes)
+3. Is "(AAI)" in "C/O NNR (AAI)" the customs broker? (default: yes)
+4. Does "PART OF 7002" mean this HBL belongs to shipment 7002? (default: yes, linked)
+5. Is the sheet always in booking order, so the year can be inferred? (default: yes; the year can be set)
+6. Should old `MNL…` HBLs (without "NNR") be renamed? (default: no, kept as written)
+
