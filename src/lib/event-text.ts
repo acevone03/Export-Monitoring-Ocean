@@ -31,6 +31,12 @@ function parse(value: string | null): any {
   }
 }
 
+const REVERT_LABEL: Record<string, string> = {
+  PICKED_UP: "pick-up", FSI_SUBMITTED: "FSI submitted", PREADVISE_SENT: "pre-advise sent", BOC_UPLOADED: "BOC upload",
+  ARRASTRE_PAID: "arrastre payment", DOCS_SENT: "export docs sent", DEPARTED: "departure", ARRIVED: "arrival",
+  CLOSED: "close", CANCELLED: "cancellation",
+};
+
 export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string {
   const v = parse(e.value);
   switch (e.type) {
@@ -49,6 +55,7 @@ export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string
     case "CLOSED": return "Shipment closed";
     case "CANCELLED": return `Cancelled: ${v}`;
     case "HBL_EDITED": return `HBL No. changed ${v.from} → ${v.to}`;
+    case "REVERTED": return `Reverted: ${REVERT_LABEL[v?.kind] ?? v?.kind} (was ${when(v?.previous)})`;
     case "IMPORTED": return `Imported from the old spreadsheet (row ${v?.row})${v?.legacyJobNo ? `, old booking no. ${v.legacyJobNo}` : ""}`;
     case "NOTE": return v && typeof v === "object" && v.photo ? "Photo from field" : "Note";
     case "FIELD_CHANGED":

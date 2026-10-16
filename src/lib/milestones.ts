@@ -18,6 +18,7 @@ export const EVENT = {
   HBL_EDITED: "HBL_EDITED",
   NOTE: "NOTE",
   IMPORTED: "IMPORTED",
+  REVERTED: "REVERTED",
 } as const;
 
 export type EventType = (typeof EVENT)[keyof typeof EVENT];

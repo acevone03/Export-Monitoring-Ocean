@@ -5,7 +5,7 @@ import { DEFAULT_RULES, computeCachedDeadlines, type RuleLike } from "./deadline
 import { EVENT } from "./milestones";
 import type { ShipmentInput } from "./shipment-input";
 import { formatDateTime } from "./time";
-import { resolveStaleAlerts } from "./alerts";
+import { reopenAlerts, resolveStaleAlerts } from "./alerts";
 
 // The only module that writes shipments. Every write:
 //   1. validates the transition,
@@ -261,6 +261,57 @@ export async function recordMilestone(
     });
     // Completing a step (or departing/cancelling/closing) closes its alerts immediately.
     await resolveStaleAlerts(tx, opts.now, id);
+    return after;
+  });
+}
+
+// ---------------------------------------------------------------- revert (supervisor)
+
+// Steps a supervisor can undo when they were recorded by mistake. Declaration status is not here:
+// it can already be set to any value, and every change is logged.
+export const REVERTIBLE = {
+  PICKED_UP: { label: "Pick-up", field: "actualPickupAt", clear: { actualPickupAt: null } },
+  FSI_SUBMITTED: { label: "FSI submitted", field: "fsiSubmittedAt", clear: { fsiSubmittedAt: null } },
+  PREADVISE_SENT: { label: "Pre-advise sent", field: "preadviseSentAt", clear: { preadviseSentAt: null } },
+  BOC_UPLOADED: { label: "BOC upload", field: "bocUploadAt", clear: { bocUploadAt: null } },
+  // The proof file stays attached to the shipment for the record; only the link to it is cleared.
+  ARRASTRE_PAID: { label: "Arrastre payment", field: "arrastrePaidAt", clear: { arrastrePaidAt: null, arrastreProofId: null } },
+  DOCS_SENT: { label: "Export docs sent", field: "exportDocsSentAt", clear: { exportDocsSentAt: null, exportDocsRecipient: null, exportDocsSubject: null } },
+  DEPARTED: { label: "Departure (ATD)", field: "atdMnl", clear: { atdMnl: null } },
+  ARRIVED: { label: "Arrival (ATA)", field: "ata", clear: { ata: null } },
+  CLOSED: { label: "Close", field: "closedAt", clear: { closedAt: null } },
+  CANCELLED: { label: "Cancellation", field: "cancelledAt", clear: { cancelledAt: null, cancelReason: null } },
+} as const satisfies Record<string, { label: string; field: keyof Shipment; clear: Prisma.ShipmentUncheckedUpdateInput }>;
+export type RevertKind = keyof typeof REVERTIBLE;
+
+/**
+ * Supervisor-only undo of a recorded step. Nothing is deleted: the step's timestamp is cleared, a
+ * REVERTED event keeps the old value and the reason, status and deadlines are recomputed, and the
+ * deadline's alerts reopen so it is watched again.
+ */
+export async function revertMilestone(db: PrismaClient, id: string, kind: RevertKind, reason: string, actor: Actor, opts: { now: Date }) {
+  if (actor.role !== "SUPERVISOR") throw new DomainError("Only a supervisor can revert a recorded step.");
+  if (!reason.trim()) throw new DomainError("Give a reason for reverting.");
+  const def = REVERTIBLE[kind];
+  return db.$transaction(async (tx) => {
+    const s = await tx.shipment.findUniqueOrThrow({ where: { id } });
+    const previous = s[def.field] as Date | null;
+    if (!previous) throw new DomainError(`${def.label} is not recorded; nothing to revert.`);
+    if (s.status === "CANCELLED" && kind !== "CANCELLED") throw new DomainError("Revert the cancellation first.");
+    if (s.status === "CLOSED" && kind !== "CLOSED") throw new DomainError("Re-open the shipment (revert Close) first.");
+    if (kind === "DEPARTED" && s.ata) throw new DomainError("Revert the arrival (ATA) first.");
+
+    const value: Record<string, unknown> = { kind, previous: previous.toISOString() };
+    if (kind === "CANCELLED") value.cancelReason = s.cancelReason;
+    if (kind === "DOCS_SENT") Object.assign(value, { to: s.exportDocsRecipient, subject: s.exportDocsSubject });
+
+    const rules = await loadRules(tx);
+    const merged = await tx.shipment.update({ where: { id }, data: def.clear });
+    const after = await tx.shipment.update({ where: { id }, data: derive(merged, rules, opts.now) });
+    await tx.milestoneEvent.create({
+      data: { shipmentId: id, type: EVENT.REVERTED, value: JSON.stringify(value), note: reason.trim(), actorId: actor.id, source: "WEB", occurredAt: opts.now },
+    });
+    await reopenAlerts(tx, id);
     return after;
   });
 }

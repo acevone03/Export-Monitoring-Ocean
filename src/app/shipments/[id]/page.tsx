@@ -11,7 +11,8 @@ import { missingMandatory } from "@/lib/mandatory";
 import { deadlinesMoot } from "@/lib/deadline-status";
 import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
-import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction } from "./actions";
+import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction } from "./actions";
+import type { RevertKind } from "@/lib/shipments";
 import { FieldLinkPanel } from "@/components/FieldLinkPanel";
 
 const DUE_STYLE: Record<DueState, string> = {
@@ -57,7 +58,9 @@ export default async function ShipmentPage({
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
-  const moot = deadlinesMoot(s); // after departure / cancel / close, open deadlines no longer turn red
+  const moot = deadlinesMoot(s);
+  // Supervisors can undo a step recorded by mistake (logged, nothing deleted).
+  const rv = (kind: RevertKind) => (user.role === "SUPERVISOR" ? <RevertForm shipmentId={s.id} kind={kind} /> : null); // after departure / cancel / close, open deadlines no longer turn red
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
     ? `FCL ${plan.map((c) => `${c.qty}×${c.size === "40HC" ? "40'HC" : `${c.size}'`}`).join(" + ")}`
@@ -95,9 +98,16 @@ export default async function ShipmentPage({
           Missing data: {missing.join(", ")}
         </div>
       )}
+      {s.status === "CLOSED" && (
+        <div className="rounded-md border border-slate-300 bg-slate-100 px-4 py-2 text-sm">
+          Closed {formatDateTime(s.closedAt)}.
+          {rv("CLOSED")}
+        </div>
+      )}
       {s.status === "CANCELLED" && (
         <div className="rounded-md border border-slate-300 bg-slate-100 px-4 py-2 text-sm">
           Cancelled {formatDateTime(s.cancelledAt)}: {s.cancelReason}
+          {rv("CANCELLED")}
         </div>
       )}
 
@@ -130,13 +140,13 @@ export default async function ShipmentPage({
 
         <section className="space-y-2 lg:col-span-3">
           <h2 className="font-semibold">Milestones</h2>
-          <Step label="1. Pick-up" due={s.requestedPickupAt} done={s.actualPickupAt} now={now} passive={moot}>
+          <Step label="1. Pick-up" due={s.requestedPickupAt} done={s.actualPickupAt} now={now} passive={moot} revert={rv("PICKED_UP")}>
             {open && <TimedAction s={s} kind="PICKED_UP" button="Mark picked up" behalf />}
           </Step>
-          <Step label="2. FSI submitted" due={s.fsiCutoffAt} done={s.fsiSubmittedAt} now={now} passive={moot}>
+          <Step label="2. FSI submitted" due={s.fsiCutoffAt} done={s.fsiSubmittedAt} now={now} passive={moot} revert={rv("FSI_SUBMITTED")}>
             {open && <TimedAction s={s} kind="FSI_SUBMITTED" button="Mark FSI submitted" />}
           </Step>
-          <Step label="3. Pre-advise sent" due={s.preadviseCutoffAt} done={s.preadviseSentAt} now={now} passive={moot}>
+          <Step label="3. Pre-advise sent" due={s.preadviseCutoffAt} done={s.preadviseSentAt} now={now} passive={moot} revert={rv("PREADVISE_SENT")}>
             {open && <TimedAction s={s} kind="PREADVISE_SENT" button="Mark pre-advise sent" />}
           </Step>
           <Step
@@ -159,11 +169,11 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="5. Uploaded to BOC portal" due={s.bocDeadlineAt} done={s.bocUploadAt} now={now} passive={moot} rule="FSI cut-off − 24h">
+          <Step label="5. Uploaded to BOC portal" due={s.bocDeadlineAt} done={s.bocUploadAt} now={now} passive={moot} rule="FSI cut-off − 24h" revert={rv("BOC_UPLOADED")}>
             {open && <TimedAction s={s} kind="BOC_UPLOADED" button="Mark uploaded" />}
           </Step>
           {s.arrastreResponsibility === "NNR" ? (
-            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} passive={moot} rule="ETD − 24h" keepOpen>
+            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} passive={moot} rule="ETD − 24h" keepOpen revert={rv("ARRASTRE_PAID")}>
               {s.arrastreProof && (
                 <a className="text-sm text-blue-700 hover:underline" href={`/api/attachments/${s.arrastreProof.id}`} target="_blank">
                   View proof ({s.arrastreProof.originalName})
@@ -183,7 +193,7 @@ export default async function ShipmentPage({
               6. Arrastre: paid by shipper, step skipped
             </div>
           )}
-          <Step label="7. Export docs sent" due={null} done={s.exportDocsSentAt} now={now} keepOpen>
+          <Step label="7. Export docs sent" due={null} done={s.exportDocsSentAt} now={now} keepOpen revert={rv("DOCS_SENT")}>
             {s.exportDocsSentAt ? (
               <p className="text-xs text-slate-600">To {s.exportDocsRecipient}: “{s.exportDocsSubject}”</p>
             ) : open && (
@@ -195,7 +205,7 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="8. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD">
+          <Step label="8. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD" revert={rv("DEPARTED")}>
             {open && !s.atdMnl && (
               <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
                 <Hidden s={s} kind="DEPARTED" />
@@ -205,7 +215,7 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="9. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl}>
+          <Step label="9. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl} revert={rv("ARRIVED")}>
             {open && s.atdMnl && <TimedAction s={s} kind="ARRIVED" button="Mark arrived" whenLabel="ATA" />}
           </Step>
 
@@ -319,7 +329,7 @@ function Row({ k, v, mono }: { k: string; v: string | null | undefined; mono?: b
 }
 
 function Step({
-  label, due, done, now, rule, dueLabel = "Due", passive, keepOpen, children,
+  label, due, done, now, rule, dueLabel = "Due", passive, keepOpen, revert, children,
 }: {
   label: string;
   due: Date | null;
@@ -329,6 +339,7 @@ function Step({
   dueLabel?: string;
   passive?: boolean;
   keepOpen?: boolean;
+  revert?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   const state = passive && !done ? "none" : dueState(due, done, now);
@@ -343,6 +354,7 @@ function Step({
         </span>
       </div>
       {children && (!done || keepOpen) && <div className="mt-2">{children}</div>}
+      {done && revert && <div className="mt-1">{revert}</div>}
     </div>
   );
 }
@@ -389,5 +401,19 @@ function TimedAction({ s, kind, button, behalf, whenLabel }: { s: Shipment; kind
       {behalf && <OnBehalf />}
       <button className="btn-secondary py-1">{button}</button>
     </ActionForm>
+  );
+}
+
+function RevertForm({ shipmentId, kind }: { shipmentId: string; kind: RevertKind }) {
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-slate-500 hover:text-red-700">Revert… (supervisor)</summary>
+      <ActionForm action={revertMilestoneAction} className="mt-1 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="shipmentId" value={shipmentId} />
+        <input type="hidden" name="kind" value={kind} />
+        <input name="reason" required minLength={3} placeholder="Why? (kept on the timeline)" className="input w-64 py-1 text-xs" />
+        <button className="rounded-md border border-red-300 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50">Revert this step</button>
+      </ActionForm>
+    </details>
   );
 }

@@ -87,8 +87,7 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 3. **Milestone time:** blank means "now". A past time can be entered (e.g. pick-up happened earlier),
    and up to 10 minutes in the future is tolerated for phone clock drift.
 4. **A milestone cannot be recorded twice**; the second attempt is rejected with the original time.
-   **[OPEN] Correcting a wrongly recorded milestone** (undo) is not built yet. Proposal: supervisor-only
-   "revert" that logs a `REVERTED` event, never deleting the original.
+   Correcting a wrongly recorded step: see "Revert" below (resolved after Step 8).
 5. **Steps may be confirmed out of order** (e.g. BOC upload before pre-advise). The status follows the
    furthest step (Step 1, decision 6).
 6. **Export declaration status can move in any direction** (each change logged), because BOC can send a
@@ -341,8 +340,22 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
 
 - **Real spreadsheet headers** (board columns, raw Excel sheet, import mapping): all three are single lists
   marked [ASSUMPTION].
-- **Undo a wrongly recorded milestone** (Step 2, decision 4): proposed as a supervisor-only, logged revert.
 - **Live test of AI intake** with a real `ANTHROPIC_API_KEY` (only mocked so far).
 - **Telegram/SMS/Viber** channels are a stub (O5). **Mailbox reading** is not built (O6).
 - **Production hardening** before go-live: HTTPS + `COOKIE_SECURE=true`, `ENABLE_DEV_TOOLS=false`, SMTP,
   Postgres (drop `connection_limit=1`), rate limiting on `/f/` and `/login` at the proxy, backups.
+
+## After Step 8: revert a wrongly recorded step
+
+1. **Supervisor-only "Revert…"** under each completed step on the shipment page (pick-up, FSI, pre-advise,
+   BOC upload, arrastre, docs sent, departure, arrival), plus on the Closed and Cancelled banners
+   (re-open / un-cancel). A reason is required.
+2. **Nothing is deleted.** The step's timestamp is cleared, the original event stays on the timeline, and a
+   `REVERTED` event records the old value, the reason and who did it. Status and deadlines are
+   recomputed. A reverted arrastre payment keeps its proof file attached to the shipment.
+3. **Alerts come back.** Alerts closed because the step was done (or because the shipment departed or was
+   closed or cancelled) reopen when the deadline is open again with the same due time. They are not
+   re-sent, and escalation continues from the current slot on the next tick.
+4. **Order is kept:** revert Close before anything else on a closed shipment, the cancellation before
+   anything else on a cancelled one, and the arrival before the departure. Export declaration status
+   needs no revert because it can already be set to any value (logged).

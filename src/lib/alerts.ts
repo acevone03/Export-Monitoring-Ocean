@@ -90,6 +90,24 @@ export async function resolveStaleAlerts(db: Db, now: Date, shipmentId?: string)
   return n;
 }
 
+/**
+ * After a supervisor reverts a step: alerts that were closed because the step was done (COMPLETED)
+ * or because the shipment departed/closed/was cancelled (MOOT) are reopened when their deadline is
+ * open again with the same due time. Already-sent alerts are not sent again; escalation simply continues.
+ */
+export async function reopenAlerts(db: Db, shipmentId: string): Promise<number> {
+  const s = await db.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+  if (deadlinesMoot(s)) return 0;
+  const closed = await db.alert.findMany({ where: { shipmentId, resolution: { in: ["COMPLETED", "MOOT"] } } });
+  let n = 0;
+  for (const a of closed) {
+    const def = DEF_BY_TYPE[a.deadlineType];
+    if (def.done(s) || def.due(s)?.getTime() !== a.dueAt.getTime()) continue;
+    n += (await db.alert.updateMany({ where: { id: a.id }, data: { resolvedAt: null, resolution: null } })).count;
+  }
+  return n;
+}
+
 // ------------------------------------------------------------------ 2. creation
 
 async function createDueAlerts(db: PrismaClient, now: Date, timings: Record<DeadlineType, RuleTiming>): Promise<number> {

@@ -8,7 +8,7 @@ import { requireUser, assertShipmentAccess } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { parseShipmentForm } from "@/lib/shipment-input";
 import { MilestoneFormSchema } from "@/lib/milestone-input";
-import { addAttachment, DomainError, editHblNo, recordMilestone, updateShipment, type MilestoneInput } from "@/lib/shipments";
+import { addAttachment, DomainError, editHblNo, recordMilestone, revertMilestone, updateShipment, REVERTIBLE, type MilestoneInput, type RevertKind } from "@/lib/shipments";
 import { storage, ALLOWED_UPLOADS, MAX_UPLOAD_BYTES } from "@/lib/storage";
 import type { ShipmentFormState } from "@/components/ShipmentForm";
 import { createFieldLink, revokeFieldLink } from "@/lib/field-links";
@@ -141,4 +141,27 @@ export async function revokeFieldLinkAction(form: FormData) {
   await assertShipmentAccess(user, p.shipmentId);
   await revokeFieldLink(prisma, p.linkId, p.shipmentId);
   revalidatePath(`/shipments/${p.shipmentId}`);
+}
+
+// ---------- revert a recorded step (supervisor)
+
+const RevertForm = z.object({
+  shipmentId: Id,
+  kind: z.enum(Object.keys(REVERTIBLE) as [RevertKind, ...RevertKind[]]),
+  reason: z.string().trim().min(3, "Give a reason for reverting.").max(500),
+});
+
+export async function revertMilestoneAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser(["SUPERVISOR"]);
+  const p = RevertForm.safeParse(Object.fromEntries(form));
+  if (!p.success) return { error: p.error.issues[0].message };
+  await assertShipmentAccess(user, p.data.shipmentId);
+  try {
+    await revertMilestone(prisma, p.data.shipmentId, p.data.kind, p.data.reason, user, { now: await now() });
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/shipments/${p.data.shipmentId}`);
+  return { ok: "Reverted." };
 }
