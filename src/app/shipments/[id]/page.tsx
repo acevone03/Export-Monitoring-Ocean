@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Shipment } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireUser, can } from "@/lib/auth";
+import { requireUser, can, assertShipmentAccess } from "@/lib/auth";
 import { now as clockNow } from "@/lib/clock";
 import { formatDateTime } from "@/lib/time";
 import { STATUS_LABEL } from "@/lib/status";
 import { dueState, type DueState } from "@/lib/due";
 import { missingMandatory } from "@/lib/mandatory";
+import { deadlinesMoot } from "@/lib/deadline-status";
 import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
 import { milestoneAction, editHblAction } from "./actions";
@@ -31,6 +32,7 @@ export default async function ShipmentPage({
   const user = await requireUser(["CS", "SUPERVISOR"]);
   const { id } = await params;
   const { created } = await searchParams;
+  await assertShipmentAccess(user, id);
   const s = await prisma.shipment
     .findUnique({
       where: { id },
@@ -47,6 +49,7 @@ export default async function ShipmentPage({
   const now = clockNow();
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
+  const moot = deadlinesMoot(s); // after departure / cancel / close, open deadlines no longer turn red
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
     ? `FCL ${plan.map((c) => `${c.qty}×${c.size === "40HC" ? "40'HC" : `${c.size}'`}`).join(" + ")}`
@@ -115,13 +118,13 @@ export default async function ShipmentPage({
 
         <section className="space-y-2 lg:col-span-3">
           <h2 className="font-semibold">Milestones</h2>
-          <Step label="1. Pick-up" due={s.requestedPickupAt} done={s.actualPickupAt} now={now}>
+          <Step label="1. Pick-up" due={s.requestedPickupAt} done={s.actualPickupAt} now={now} passive={moot}>
             {open && <TimedAction s={s} kind="PICKED_UP" button="Mark picked up" behalf />}
           </Step>
-          <Step label="2. FSI submitted" due={s.fsiCutoffAt} done={s.fsiSubmittedAt} now={now}>
+          <Step label="2. FSI submitted" due={s.fsiCutoffAt} done={s.fsiSubmittedAt} now={now} passive={moot}>
             {open && <TimedAction s={s} kind="FSI_SUBMITTED" button="Mark FSI submitted" />}
           </Step>
-          <Step label="3. Pre-advise sent" due={s.preadviseCutoffAt} done={s.preadviseSentAt} now={now}>
+          <Step label="3. Pre-advise sent" due={s.preadviseCutoffAt} done={s.preadviseSentAt} now={now} passive={moot}>
             {open && <TimedAction s={s} kind="PREADVISE_SENT" button="Mark pre-advise sent" />}
           </Step>
           <Step
@@ -144,11 +147,11 @@ export default async function ShipmentPage({
               </ActionForm>
             )}
           </Step>
-          <Step label="5. Uploaded to BOC portal" due={s.bocDeadlineAt} done={s.bocUploadAt} now={now} rule="FSI cut-off − 24h">
+          <Step label="5. Uploaded to BOC portal" due={s.bocDeadlineAt} done={s.bocUploadAt} now={now} passive={moot} rule="FSI cut-off − 24h">
             {open && <TimedAction s={s} kind="BOC_UPLOADED" button="Mark uploaded" />}
           </Step>
           {s.arrastreResponsibility === "NNR" ? (
-            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} rule="ETD − 24h" keepOpen>
+            <Step label="6. Arrastre paid" due={s.arrastreDeadlineAt} done={s.arrastrePaidAt} now={now} passive={moot} rule="ETD − 24h" keepOpen>
               {s.arrastreProof && (
                 <a className="text-sm text-blue-700 hover:underline" href={`/api/attachments/${s.arrastreProof.id}`} target="_blank">
                   View proof ({s.arrastreProof.originalName})

@@ -117,3 +117,32 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
     which the app cannot control. Everything the app displays uses `DD-MMM-YYYY HH:mm`, Manila time.
 16. **HBL correction** (supervisor) rejects a number used by another shipment or retired by an earlier
     correction, and logs the reason.
+
+## Step 3 decisions (live board)
+
+1. **CS see only their own shipments** (assigned to them, or created by them). Supervisors see all, per
+   spec section 4 ("supervisor … view all shipments"). This applies everywhere: board, shipment page,
+   edit, milestone actions, and proof downloads. Another CS's shipment returns 404, so ids don't reveal
+   that a shipment exists. One rule in `src/lib/access.ts`; change it there if CS should cover each other.
+2. **Board column order is an [ASSUMPTION]** until the current spreadsheet's headers are confirmed. It is
+   one array in `src/app/board-columns.tsx` (Job No., HBL No., Shipper, Destination, POD, Cargo,
+   Carrier, Booking ref, Pick-up, FSI, Pre-advise, Export decl., BOC upload, Arrastre, Docs sent,
+   ETD, ATD, ETA, Status, CS, Remarks). The Excel "raw data" sheet (Step 6) will reuse it.
+3. **Row colour** = worst open deadline across the five tracked deadlines (`src/lib/deadline-status.ts`):
+   red if any is overdue, amber if any is due within 4h, else green. Deadline cells are coloured
+   individually and show ✓ + time once done. Closed/cancelled rows are grey.
+4. **After departure (ATD), open pre-departure deadlines stop turning red.** A missed FSI or BOC step
+   on a shipment that has already sailed is history, not an action item. It still shows in the monthly
+   missed-deadline metrics (Step 6). The same rule applies on the shipment page and, in Step 4, to alerts.
+5. **Default view = active shipments** (everything except closed and cancelled). The quick-filter chips are
+   Overdue, Due within 4h, Missing data, and All incl. closed. Chip counts respect the other filters.
+6. **Default sort:** most urgent first (red, amber, green), then ETD ascending (unknown ETD last), then
+   newest Job No. Column-header sorting is not built.
+7. **Filters live in the URL** (bookmarkable). Invalid values are ignored, not errors. The date range
+   filters on **ETD MNL**, with both ends inclusive and Manila days. The spec's "mode" filter is dropped
+   (ocean only), and the CS filter is shown only to supervisors.
+8. **"Live" = auto-refresh every 60 s** while the tab is visible. No websockets.
+9. **Deadline-state and missing-data filters are computed in memory** after the database query. Fine for
+   hundreds of active shipments; move into SQL if volumes grow to many thousands.
+10. **The shipment detail timeline** (all `milestone_events`, newest first, with actor, source and note)
+    was built in Step 2. Step 3 adds nothing to it.

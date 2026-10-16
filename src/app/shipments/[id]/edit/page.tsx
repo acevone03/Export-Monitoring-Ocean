@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, assertShipmentAccess } from "@/lib/auth";
 import { ShipmentForm } from "@/components/ShipmentForm";
 import { formOptions, toFormValues } from "../../data";
 import { updateShipmentAction } from "../actions";
 
 export default async function EditShipmentPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser(["CS", "SUPERVISOR"]);
+  const user = await requireUser(["CS", "SUPERVISOR"]);
   const { id } = await params;
+  await assertShipmentAccess(user, id);
   const s = await prisma.shipment.findUnique({ where: { id } }).catch(() => null);
   if (!s) notFound();
   if (s.status === "CLOSED" || s.status === "CANCELLED") redirect(`/shipments/${id}`);

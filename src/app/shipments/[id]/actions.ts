@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, assertShipmentAccess } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { parseShipmentForm } from "@/lib/shipment-input";
 import { MilestoneFormSchema } from "@/lib/milestone-input";
@@ -21,6 +21,7 @@ const Id = z.string().uuid();
 
 export async function updateShipmentAction(id: string, _prev: ShipmentFormState, form: FormData): Promise<ShipmentFormState> {
   const user = await requireUser(["CS", "SUPERVISOR"]);
+  await assertShipmentAccess(user, Id.parse(id));
   const parsed = parseShipmentForm(form);
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
   try {
@@ -53,6 +54,7 @@ export async function milestoneAction(_prev: ActionState, form: FormData): Promi
   const m = parsed.data;
   const at = "at" in m ? (m.at ?? clock) : undefined;
   const { shipmentId, onBehalf, note } = common.data;
+  await assertShipmentAccess(user, shipmentId);
 
   try {
     let input: MilestoneInput;

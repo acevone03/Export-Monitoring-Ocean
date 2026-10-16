@@ -41,7 +41,7 @@ DECISIONS.md           every [OPEN]/[ASSUMPTION] and how it is resolved for now
 
 - [x] 1. Schema, auth, seed data
 - [x] 2. Shipment form + numbering + status machine + tests
-- [ ] 3. Live board + shipment detail timeline
+- [x] 3. Live board + shipment detail timeline
 - [ ] 4. Deadline engine + scheduler + notifications + simulate-time
 - [ ] 5. Field magic-link page
 - [ ] 6. Daily and monthly reports + Excel export

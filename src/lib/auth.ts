@@ -1,9 +1,10 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Role, User } from "@prisma/client";
 import { prisma } from "./db";
 import { hashToken, newToken } from "./tokens";
+import { canAccessShipment } from "./access";
 
 export const SESSION_COOKIE = "nnr_session";
 const SESSION_DAYS = 7;
@@ -61,4 +62,13 @@ export const can = {
   viewMonthlyReport: (u: SessionUser) => u.role === "SUPERVISOR",
   viewDailyReport: (u: SessionUser) => u.role === "SUPERVISOR" || u.role === "CS",
   editHblNo: (u: SessionUser) => u.role === "SUPERVISOR",
+  viewAllShipments: (u: SessionUser) => u.role === "SUPERVISOR",
 };
+
+/** 404 (not 403) when the user may not see this shipment, so ids do not leak existence. */
+export async function assertShipmentAccess(user: SessionUser, shipmentId: string) {
+  const s = await prisma.shipment
+    .findUnique({ where: { id: shipmentId }, select: { assignedCsId: true, createdById: true } })
+    .catch(() => null);
+  if (!s || !canAccessShipment(user, s)) notFound();
+}
