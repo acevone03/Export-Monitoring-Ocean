@@ -8,7 +8,7 @@ All times are Asia/Manila; dates display as `DD-MMM-YYYY`, 24h time.
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env    # Windows: copy .env.example .env
 npm run setup        # creates the SQLite DB and loads demo data
 npm run dev          # http://localhost:3000
 ```

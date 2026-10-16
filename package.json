@@ -9,14 +9,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
-    "setup": "prisma migrate deploy && tsx prisma/seed.ts",
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "setup": "prisma migrate deploy && tsx --env-file=.env prisma/seed.ts",
     "scheduler": "tsx --env-file=.env scripts/scheduler.ts",
     "tick": "tsx --env-file=.env scripts/scheduler.ts --once",
     "docs": "tsx scripts/gen-docs.ts"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx --env-file=.env prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
