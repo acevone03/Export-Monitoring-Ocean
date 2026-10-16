@@ -146,3 +146,48 @@ The spec covers ocean and air. **The product owner has narrowed the app to ocean
    hundreds of active shipments; move into SQL if volumes grow to many thousands.
 10. **The shipment detail timeline** (all `milestone_events`, newest first, with actor, source and note)
     was built in Step 2. Step 3 adds nothing to it.
+
+## Step 4 decisions (deadline alerts, scheduler, notifications, simulate-time)
+
+1. **One alert per slot, latest slot only.** For each open deadline, the engine works out the single slot
+   that applies now: the nearest reminder already reached (−24h, −4h, −1h), DUE at the due time, or OVERDUE
+   at +2h, +4h, … If the scheduler was down or the clock jumped, it sends one up-to-date alert, not a
+   burst of stale ones (`currentSlot` in `src/lib/alerts.ts`).
+2. **Idempotency:** a database unique key on (shipment, deadline, level, offset, due time) means an alert
+   is created once, however many ticks run. Delivery is **claimed** (`sentAt` flipped from null)
+   before sending, so two scheduler processes never send the same alert twice (tested with two
+   concurrent ticks). `dueAt` is in the key, so moving a cut-off starts a fresh series and the old open
+   alerts are closed as `SUPERSEDED`.
+3. **Escalation:** "at due time, then every 2h while overdue (max 3 repeats/day)" means DUE at +0 (CS only),
+   then OVERDUE at +2h, +4h, +6h (CS + all active supervisors). The cap of 3 OVERDUE per **Manila
+   calendar day** resets at midnight. If the assigned CS is deactivated, every level goes to supervisors.
+4. **Alerts close only when the step is done** (`COMPLETED`), when the deadline moves (`SUPERSEDED`), or
+   when the shipment departs, is cancelled or is closed (`MOOT`). This happens inside the same
+   transaction as the milestone or edit, so a completed step clears its alerts at once, not at the next tick.
+5. **Acknowledge** marks the whole series (shipment + deadline) as seen. It does not stop alerts.
+   **Snooze** (1h or 4h; 15 min to 24h allowed) holds back reminders and DUE for that deadline. **OVERDUE
+   escalation to supervisors is never snoozed.**
+6. **Notification centre** shows one card per open deadline (the newest alert, with a count of earlier
+   ones). "Show resolved too" shows history. The 🔔 count is unread notifications.
+7. **Channels:** `Notifier` interface (`src/lib/notify/index.ts`) with in-app, email, and a Telegram stub
+   **[OPEN O5]**. Adding SMS/Viber = one class, no engine change. If one channel fails (e.g. SMTP down),
+   the others still deliver and the error is stored on the alert. Failed emails are **not retried** in
+   the MVP.
+8. **Email without SMTP:** when `SMTP_HOST` is empty, emails are written to `OUTBOX_DIR` and shown at
+   `/dev/outbox`, so the demo can show "the alert email" without a mail server.
+9. **Rules editor** (`/admin/rules`, supervisor): BOC upload and arrastre have an editable base date + offset.
+   Pick-up, FSI and pre-advise are due at the time CS enters, so only their alert timing (reminder hours,
+   repeat interval, max/day) and on/off are editable. Saving recomputes deadlines on all open
+   shipments and closes alerts whose due time moved.
+10. **Simulated clock:** an offset stored in the database (`AppSetting`), so the web app and the separate
+    scheduler process share it. It applies only when `ENABLE_DEV_TOOLS=true`. Logins and sessions always
+    use real time. An amber banner shows on every page while it is active. `/dev/simulate-time` and
+    `/dev/outbox` are supervisor-only and return 404 when dev tools are off. Each clock move also runs
+    an alert check immediately.
+11. **Scheduler** is a separate process (`npm run scheduler`, node-cron, every 5 minutes, Asia/Manila). It
+    skips a tick if the previous one is still running. `npm run tick` runs once. The daily report job is
+    added to this process in Step 6.
+12. **Alert text is a snapshot** of the moment it was sent ("due in 4h"). The shipment page and board
+    always show the live state.
+13. **Timestamps under simulation:** alerts and in-app notifications record app time (simulated when
+    active), so a demo timeline reads correctly. `readAt` uses real time.

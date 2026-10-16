@@ -46,7 +46,7 @@ export default async function ShipmentPage({
     .catch(() => null);
   if (!s) notFound();
 
-  const now = clockNow();
+  const now = await clockNow();
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
   const moot = deadlinesMoot(s); // after departure / cancel / close, open deadlines no longer turn red

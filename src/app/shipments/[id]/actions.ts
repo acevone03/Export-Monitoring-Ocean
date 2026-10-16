@@ -25,7 +25,7 @@ export async function updateShipmentAction(id: string, _prev: ShipmentFormState,
   const parsed = parseShipmentForm(form);
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
   try {
-    await updateShipment(prisma, Id.parse(id), parsed.data, user, { now: now() });
+    await updateShipment(prisma, Id.parse(id), parsed.data, user, { now: await now() });
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message, values: formValuesOf(form) };
     throw e;
@@ -50,7 +50,7 @@ export async function milestoneAction(_prev: ActionState, form: FormData): Promi
   if (!common.success) return { error: "Invalid request." };
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const clock = now();
+  const clock = await now();
   const m = parsed.data;
   const at = "at" in m ? (m.at ?? clock) : undefined;
   const { shipmentId, onBehalf, note } = common.data;
@@ -102,7 +102,7 @@ export async function editHblAction(_prev: ActionState, form: FormData): Promise
   const p = z.object({ shipmentId: Id, hblNo: z.string().trim(), reason: z.string().trim() }).safeParse(Object.fromEntries(form));
   if (!p.success) return { error: "Invalid request." };
   try {
-    await editHblNo(prisma, p.data.shipmentId, p.data.hblNo, p.data.reason, user, { now: now() });
+    await editHblNo(prisma, p.data.shipmentId, p.data.hblNo, p.data.reason, user, { now: await now() });
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message };
     throw e;

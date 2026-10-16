@@ -5,6 +5,7 @@ import { DEFAULT_RULES, computeCachedDeadlines, type RuleLike } from "./deadline
 import { EVENT } from "./milestones";
 import type { ShipmentInput } from "./shipment-input";
 import { formatDateTime } from "./time";
+import { resolveStaleAlerts } from "./alerts";
 
 // The only module that writes shipments. Every write:
 //   1. validates the transition,
@@ -142,6 +143,8 @@ export async function updateShipment(
       events.push({ shipmentId: id, type: EVENT.PICKUP_SCHEDULED, value: after.requestedPickupAt.toISOString(), actorId: actor.id, source: "WEB", occurredAt: opts.now });
     }
     await tx.milestoneEvent.createMany({ data: events });
+    // A moved cut-off supersedes its open alerts right away; the next tick starts a fresh series.
+    await resolveStaleAlerts(tx, opts.now, id);
     return after;
   });
 }
@@ -256,6 +259,8 @@ export async function recordMilestone(
     await tx.milestoneEvent.create({
       data: { shipmentId: id, type, value, note: opts.note || null, actorId: actor?.id ?? null, source: opts.source, occurredAt: opts.now },
     });
+    // Completing a step (or departing/cancelling/closing) closes its alerts immediately.
+    await resolveStaleAlerts(tx, opts.now, id);
     return after;
   });
 }
@@ -292,4 +297,24 @@ export async function addAttachment(
   uploadedById: string | null,
 ) {
   return db.attachment.create({ data: { shipmentId, kind, uploadedById, ...file } });
+}
+
+// ---------------------------------------------------------------- rule changes
+
+/** After a supervisor edits deadline rules: recompute cached deadlines on every open shipment. */
+export async function recomputeOpenDeadlines(db: PrismaClient, now: Date): Promise<number> {
+  return db.$transaction(async (tx) => {
+    const rules = await loadRules(tx);
+    const open = await tx.shipment.findMany({ where: { status: { notIn: ["CLOSED", "CANCELLED"] } } });
+    let changed = 0;
+    for (const s of open) {
+      const d = computeCachedDeadlines(rules, s);
+      if (d.bocDeadlineAt?.getTime() !== s.bocDeadlineAt?.getTime() || d.arrastreDeadlineAt?.getTime() !== s.arrastreDeadlineAt?.getTime()) {
+        await tx.shipment.update({ where: { id: s.id }, data: d });
+        changed++;
+      }
+    }
+    await resolveStaleAlerts(tx, now);
+    return changed;
+  });
 }

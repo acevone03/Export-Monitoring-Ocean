@@ -289,7 +289,9 @@ model Alert {
   ackBy         User?        @relation("AlertAckBy", fields: [ackById], references: [id])
   ackAt         DateTime?
   snoozedUntil  DateTime?
-  resolvedAt    DateTime?    // set when the milestone is completed
+  resolvedAt    DateTime?    // set when the milestone is completed (or the alert is superseded)
+  resolution    String?      // COMPLETED | SUPERSEDED (due time changed) | MOOT (departed/cancelled/closed)
+  deliveryError String?      // last channel error, e.g. SMTP failure
   createdAt     DateTime     @default(now())
 
   notifications Notification[]
@@ -354,4 +356,12 @@ model FieldLink {
   expiresAt   DateTime
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
+}
+
+// Small key/value store for app-wide settings shared by the web app and the scheduler,
+// e.g. the dev-only simulated clock offset.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

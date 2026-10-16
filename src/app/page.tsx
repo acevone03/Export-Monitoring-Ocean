@@ -32,7 +32,7 @@ export default async function Board({ searchParams }: { searchParams: Promise<Re
   }
 
   const f = parseBoardFilters(await searchParams);
-  const now = clockNow();
+  const now = await clockNow();
   const scope = shipmentScope(user);
   const include = { shipper: { select: { name: true } }, assignedCs: { select: { name: true } } } as const;
 

@@ -7,3 +7,4 @@ uploads
 next-env.d.ts
 *.tsbuildinfo
 prisma/test.db*
+outbox

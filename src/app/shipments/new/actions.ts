@@ -15,7 +15,7 @@ export async function createShipmentAction(_prev: ShipmentFormState, form: FormD
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
   let id: string;
   try {
-    id = (await createShipment(prisma, parsed.data, user, { now: now(), source: "CS" })).id;
+    id = (await createShipment(prisma, parsed.data, user, { now: await now(), source: "CS" })).id;
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message, values: formValuesOf(form) };
     throw e;
