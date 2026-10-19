@@ -9,6 +9,9 @@ import { loadReportShipments } from "@/lib/reports/deliver";
 import { ActionForm } from "@/components/ActionForm";
 import { sendDailyNowAction } from "./actions";
 
+// Open items due today are red, due tomorrow orange.
+const DUE_ROW = { today: "bg-red-200 text-red-950 font-medium", tomorrow: "bg-orange-200 text-orange-950" } as const;
+
 export default async function DailyReportPage() {
   const user = await requireUser(["CS", "SUPERVISOR"]);
   const t = await clockNow();
@@ -23,6 +26,10 @@ export default async function DailyReportPage() {
           <p className="text-sm text-slate-500">
             {can.viewAllShipments(user) ? "All shipments" : "Your shipments"} · as of {formatDateTime(report.generatedAt)} ·
             emailed automatically every day at 07:30
+          </p>
+          <p className="mt-1 flex flex-wrap gap-3 text-xs">
+            <span className="rounded bg-red-200 px-2 py-0.5 font-medium text-red-950">Due today</span>
+            <span className="rounded bg-orange-200 px-2 py-0.5 text-orange-950">Due tomorrow</span>
           </p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -50,7 +57,7 @@ export default async function DailyReportPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-200/70">
                   {sec.items.map((i, k) => (
-                    <tr key={`${i.shipmentId}-${i.what}-${k}`}>
+                    <tr key={`${i.shipmentId}-${i.what}-${k}`} className={i.dueTag ? DUE_ROW[i.dueTag] : ""}>
                       <td className="whitespace-nowrap py-1.5 pr-4 font-mono"><Link href={`/shipments/${i.shipmentId}`} className="text-blue-700 hover:underline">{i.jobNo}</Link></td>
                       <td className="pr-4">{i.shipper}</td>
                       <td className="pr-4">{i.what}</td>

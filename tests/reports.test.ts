@@ -65,6 +65,15 @@ describe("daily report", () => {
     expect(sec("departed").map((i) => i.jobNo)).toEqual([departed.jobNo]);
   });
 
+  it("tags open items due today (red) and tomorrow (orange), not done ones", () => {
+    const tagOf = (k: string, job: string) => sec(k).find((i) => i.jobNo === job)?.dueTag;
+    expect(tagOf("pickups", overdue.jobNo)).toBe("today");
+    expect(tagOf("pickups", pickupTomorrow.jobNo)).toBe("tomorrow");
+    expect(tagOf("cutoffs", fsiToday.jobNo)).toBe("today");
+    const done = buildDailyReport([ship({ requestedPickupAt: t(2), actualPickupAt: t(-1) })], now);
+    expect(done.sections.find((x) => x.key === "pickups")!.items[0].dueTag).toBeUndefined();
+  });
+
   it("lists pending BOC/arrastre (not after departure) and missing data, never cancelled", () => {
     const pendingJobs = new Set(sec("pending").map((i) => i.jobNo));
     expect(pendingJobs.has(departed.jobNo)).toBe(false);

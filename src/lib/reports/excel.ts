@@ -13,6 +13,8 @@ const DATE_FMT = "dd-mmm-yyyy hh:mm";
 const DAY_FMT = "dd-mmm-yyyy"; // date-only values (ETD, ETA, cut-off) are stored at 00:00 Manila
 const fmtFor = (d: Date) => (isManilaMidnight(d) ? DAY_FMT : DATE_FMT);
 const RED = "FFFDE2E2";
+const DUE_TODAY = "FFFCA5A5"; // red: due today
+const DUE_TOMORROW = "FFFED7AA"; // orange: due tomorrow
 const HEADER = "FFE2E8F0";
 
 const toCell = (v: CellValue) => (v instanceof Date ? new Date(v.getTime() + MANILA_MS) : v ?? "");
@@ -21,7 +23,7 @@ function table(
   ws: ExcelJS.Worksheet,
   columns: Array<{ header: string; width?: number }>,
   rows: CellValue[][],
-  opts: { startRow?: number; fill?: string } = {},
+  opts: { startRow?: number; fill?: string; rowFill?: (rowIndex: number) => string | undefined } = {},
 ) {
   const start = opts.startRow ?? 1;
   const header = ws.getRow(start);
@@ -39,7 +41,8 @@ function table(
       const cell = row.getCell(ci + 1);
       cell.value = toCell(v) as ExcelJS.CellValue;
       if (v instanceof Date) cell.numFmt = fmtFor(v);
-      if (opts.fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+      const fill = opts.rowFill?.(ri) ?? opts.fill;
+      if (fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
     });
   });
   return start + 1 + rows.length;
@@ -120,6 +123,7 @@ export async function dailyWorkbook(report: DailyReport, shipments: ExportShipme
     row = table(ws, cols, sec.items.map((i) => [i.jobNo, i.shipper, i.what, i.at, i.doneAt, i.detail ?? "", i.cs]), {
       startRow: row,
       fill: sec.tone === "red" ? RED : undefined,
+      rowFill: (ri) => (sec.items[ri].dueTag === "today" ? DUE_TODAY : sec.items[ri].dueTag === "tomorrow" ? DUE_TOMORROW : undefined),
     }) + 1;
   }
   rawSheet(wb, shipments);

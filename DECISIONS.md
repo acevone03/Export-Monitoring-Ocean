@@ -517,3 +517,9 @@ number. The line is matched from "Shipping line / co-loader" by name or alias. D
 number in the link (`{ref}`), so the result opens directly; the others open their tracking page and CS paste the copied
 number. Supervisors and CS edit the list on **Carriers** (`/carriers`, AppSetting `CARRIER_TRACKING`): add co-loaders,
 other spellings, or a `{ref}` link when a carrier supports one. Only https links are used. Unknown carriers get no link.
+
+## Daily report highlights (19-Oct-2026)
+
+Open items (not yet done) due **today** are highlighted **red** and due **tomorrow** **orange** (Manila days) in the
+overdue, pick-ups, cut-offs and pending sections, on the page, in the Excel download, and marked [DUE TODAY] /
+[DUE TOMORROW] in the email. Departed, payments and missing-data rows are not highlighted (their dates are not due dates).

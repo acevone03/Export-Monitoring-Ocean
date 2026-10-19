@@ -17,6 +17,8 @@ export type DailyItem = {
   at: Date | null; // due time, or event time for "departed"
   doneAt: Date | null;
   detail?: string;
+  /** Not done and due today (red) or tomorrow (orange), Manila days. Only for sections whose time is a due time. */
+  dueTag?: "today" | "tomorrow";
 };
 
 export type DailySection = { key: string; title: string; tone: "red" | "normal"; items: DailyItem[] };
@@ -80,6 +82,17 @@ export function buildDailyReport(shipments: ExportShipment[], now: Date): DailyR
     .map((s) => ({ s, m: missingMandatory(s) }))
     .filter(({ m }) => m.length > 0)
     .map(({ s, m }) => ({ ...base(s), what: "Missing data", at: s.etdMnl, doneAt: null, detail: m.join(", ") }));
+
+  // Highlight what is still open and due today (red) or tomorrow (orange).
+  const tag = (items: DailyItem[]) => {
+    for (const i of items) {
+      if (i.doneAt || !i.at) continue;
+      if (within(i.at, today)) i.dueTag = "today";
+      else if (within(i.at, tomorrow)) i.dueTag = "tomorrow";
+    }
+    return items;
+  };
+  [overdue, pickups, cutoffs, pending].forEach(tag);
 
   return {
     date: formatDate(now),
