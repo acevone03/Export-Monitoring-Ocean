@@ -23,6 +23,11 @@ To start over: delete `prisma/dev.db` and run `npm run setup` again.
 To remove the demo (or any) shipments and shippers but keep users and settings: stop the app and run
 `npm run clear-data` (type DELETE to confirm). A backup is saved first as `prisma/backup-YYYYMMDD-HHMM.db`.
 
+To set up the real team and remove the demo logins: copy `users.example.csv` to `users.csv`, fill in names,
+emails, roles and job titles, then run `npm run setup-users`. It prints a temporary password for each new person
+(shown once); they change it under **My account** (click your name, top right). Supervisors can also
+**Reset password** on the Users page. `users.csv` is never uploaded to GitHub.
+
 ### Demo: watch a deadline go amber, then red
 
 1. Log in as `sup1@nnr.test`, create a shipment with requested pick-up about 5 hours from now.

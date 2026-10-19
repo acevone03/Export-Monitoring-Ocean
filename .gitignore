@@ -8,3 +8,5 @@ next-env.d.ts
 *.tsbuildinfo
 prisma/test.db*
 outbox
+# Staff list for npm run setup-users (emails; keep off GitHub)
+users.csv

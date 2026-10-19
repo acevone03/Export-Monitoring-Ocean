@@ -60,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     )}
                   </Link>
                 )}
-                <span className="text-slate-500">{user.name} · {user.role}</span>
+                <Link href="/account" className="text-slate-500 hover:text-blue-700" title="My account: change password">{user.name} · {user.role}</Link>
                 <form action={logoutAction}>
                   <button className="btn-secondary py-1">Log out</button>
                 </form>

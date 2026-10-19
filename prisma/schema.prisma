@@ -115,6 +115,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         Role
+  title        String?  // job title shown in the app, e.g. "CS Export Assistant"; access comes from role
   phone        String?
   viberId      String?
   telegramId   String?
