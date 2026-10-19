@@ -25,6 +25,8 @@ export type BookingSheetData = {
   pickupDate: string;
   finalDestination: string;
   carrierCutoff: string;
+  edCutoff: string;
+  arrastreCutoff: string;
   shipper: string;
   shipperLines: string[];
   carrier: string;
@@ -70,6 +72,9 @@ export function bookingSheetData(s: BookingSheetShipment, printedAt: Date): Book
     pickupDate: formatInstructionDateTime(s.requestedPickupAt),
     finalDestination: s.destinationPort,
     carrierCutoff: fcl ? formatInstructionDate(s.cyCutoffAt) : "",
+    // ED (export declaration) cut-off = BOC portal upload deadline (FSI cut-off − 24h by default).
+    edCutoff: formatInstructionDateTime(s.bocDeadlineAt),
+    arrastreCutoff: s.arrastreResponsibility === "SHIPPER" ? "BY SHIPPER" : formatInstructionDateTime(s.arrastreDeadlineAt ?? s.arrastreCutoffAt),
     shipper: `${s.shipper.name}`,
     shipperLines: [address, contact].filter((x): x is string => !!x),
     carrier: [s.carrierName, !fcl ? s.consolidator : null].filter(Boolean).join(" / "),
@@ -138,6 +143,8 @@ html, body { margin: 0; background: #e5e7eb; color: #000; font-family: Calibri, 
 .lb { font-weight: 700; }
 .v { font-size: 8.5pt; font-weight: 700; color: #0b2a6b; padding-top: 1px; word-break: break-word; }
 .big .v { font-size: 12pt; text-align: center; }
+.cut .v { font-size: 7.5pt; white-space: nowrap; }
+.cut .l { font-size: 5pt; }
 .sub { font-size: 7pt; font-weight: 400; color: #0b2a6b; }
 .cols { display: flex; border-bottom: 2px solid #000; }
 .left { width: 48%; border-right: 1px solid #000; }
@@ -190,9 +197,11 @@ export function bookingSheetHtml(d: BookingSheetData, backHref: string): string 
   </div>
   <div class="row">
     ${cell('<span class="lb">Shipper Book Date</span>', d.shipperBookDate, "", "width:12.3%;min-height:30px")}
-    ${cell('<span class="lb">Pick Up Date</span>', d.pickupDate, "", "width:24.7%")}
-    ${cell('<span class="lb">Final Destination</span>', d.finalDestination, "", "width:33%")}
-    ${cell("CARRIER CUT OFF DATE AND TIME", d.carrierCutoff, "", "width:30%")}
+    ${cell('<span class="lb">Pick Up Date</span>', d.pickupDate, "", "width:21.2%")}
+    ${cell('<span class="lb">Final Destination</span>', d.finalDestination, "", "width:20.5%")}
+    ${cell("CARRIER CUT OFF DATE AND TIME", d.carrierCutoff, "cut", "width:15.6%")}
+    ${cell("ED CUT OFF DATE AND TIME", d.edCutoff, "cut", "width:15.2%")}
+    ${cell("ARRASTRE CUT OFF DATE AND TIME", d.arrastreCutoff, "cut", "width:15.2%")}
   </div>
   <div class="row">
     <div class="c" style="width:48%;min-height:30px"><div class="l lb">SHIPPER</div>${v(d.shipper)}${d.shipperLines.map((x) => `<div class="sub">${esc(x)}</div>`).join("")}</div>
