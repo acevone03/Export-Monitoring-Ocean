@@ -72,13 +72,29 @@ export function instructionRows(s: ShipmentWithShipper): Array<[string, string]>
 
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function buildInstructionMail(s: ShipmentWithShipper): { subject: string; text: string; html: string } {
-  const cargo = s.cargoType === "FCL" ? `FCL ${containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null)}` : `LCL ${qtyText(s)}`;
-  const subject = `PICK-UP INSTRUCTION | ${cargo.trim()} | ${s.hblNo ?? s.jobNo} | ${s.shipper.name}`;
+/** Container size for the subject: "1x40HC + 2x20 Reefer" (FCL) or "LCL 6 PALLETS". */
+const sizeText = (s: Shipment) =>
+  s.cargoType === "FCL" ? containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null) : `LCL ${qtyText(s)}`.trim();
+
+/** "ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905" — blanks are left out. */
+export function instructionSubject(s: ShipmentWithShipper): string {
+  const parts = [s.shipper.name, s.carrierBookingRef, sizeText(s), s.hblNo ?? s.jobNo].map((x) => x?.trim()).filter(Boolean);
+  return `ATW for ${parts.join(" / ")}`;
+}
+
+export type MailOptions = { revised?: boolean; previousSentAt?: Date | null };
+
+export function buildInstructionMail(s: ShipmentWithShipper, opts: MailOptions = {}): { subject: string; text: string; html: string } {
+  const subject = instructionSubject(s);
+  const title = `${opts.revised ? "REVISED " : ""}PICK-UP INSTRUCTION (${s.cargoType})`;
+  const revisedNote = opts.revised
+    ? `This replaces the instruction sent${opts.previousSentAt ? ` on ${formatInstructionDateTime(opts.previousSentAt)}` : " earlier"}. Please follow this one.`
+    : null;
   const rows = instructionRows(s);
   const width = Math.max(...rows.map(([k]) => k.length));
   const text = [
-    `PICK-UP INSTRUCTION (${s.cargoType})`,
+    title,
+    ...(revisedNote ? [revisedNote] : []),
     "",
     ...rows.map(([k, v]) => `${k.padEnd(width)} : ${v}`),
     "",
@@ -86,7 +102,8 @@ export function buildInstructionMail(s: ShipmentWithShipper): { subject: string;
     `NNR Global Logistics · Job No. ${s.jobNo}`,
   ].join("\n");
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">
-<p style="font-size:16px;font-weight:bold;margin:0 0 8px">PICK-UP INSTRUCTION (${s.cargoType})</p>
+<p style="font-size:16px;font-weight:bold;margin:0 0 8px">${esc(title)}</p>
+${revisedNote ? `<p style="color:#b91c1c;font-weight:bold;margin:0 0 8px">${esc(revisedNote)}</p>` : ""}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;border:1px solid #cbd5e1">
 ${rows.map(([k, v]) => `<tr><td style="border:1px solid #cbd5e1;background:#f1f5f9;font-weight:bold;white-space:nowrap">${esc(k)}</td><td style="border:1px solid #cbd5e1">${esc(v) || "&nbsp;"}</td></tr>`).join("\n")}
 </table>
@@ -102,14 +119,22 @@ export type InstructionResult =
   | { status: "failed"; to: string[]; error: string };
 
 /** Emails the instruction to the saved transport addresses and logs it on the timeline. Never throws for mail errors. */
-export async function sendPickupInstruction(db: PrismaClient, shipmentId: string, actorId: string | null, now: Date): Promise<InstructionResult> {
+export async function sendPickupInstruction(
+  db: PrismaClient,
+  shipmentId: string,
+  actorId: string | null,
+  now: Date,
+  opts: { revised?: boolean } = {},
+): Promise<InstructionResult> {
   const s = await db.shipment.findUniqueOrThrow({
     where: { id: shipmentId },
     include: { shipper: { select: { code: true, name: true, contactPerson: true, phone: true, defaultPickupAddress: true } } },
   });
   const to = await getTransportEmails(db);
   if (to.length === 0) return { status: "no_recipients" };
-  const mail = buildInstructionMail(s);
+  // Only call it "revised" if an earlier one actually went out.
+  const revised = !!opts.revised && !!s.pickupInstructionSentAt;
+  const mail = buildInstructionMail(s, { revised, previousSentAt: s.pickupInstructionSentAt });
   try {
     await sendMail({ to, ...mail });
   } catch (e) {
@@ -122,8 +147,23 @@ export async function sendPickupInstruction(db: PrismaClient, shipmentId: string
   await db.$transaction([
     db.shipment.update({ where: { id: shipmentId }, data: { pickupInstructionSentAt: now } }),
     db.milestoneEvent.create({
-      data: { shipmentId, type: EVENT.PICKUP_INSTRUCTION_SENT, value: JSON.stringify({ to, subject: mail.subject }), actorId, source: "WEB", occurredAt: now },
+      data: { shipmentId, type: EVENT.PICKUP_INSTRUCTION_SENT, value: JSON.stringify({ to, subject: mail.subject, revised }), actorId, source: "WEB", occurredAt: now },
     }),
   ]);
   return { status: "sent", to };
+}
+
+// Fields that appear on the instruction. When an edit changes any of them, the instruction is resent.
+const INSTRUCTION_FIELDS = [
+  "shipperId", "pickupAddress", "requestedPickupAt", "carrierBookingRef", "hblNo", "cargoType", "containerPlan", "lclQty", "lclUnit",
+  "pod", "destinationPort", "positioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
+  "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks",
+] as const satisfies ReadonlyArray<keyof Shipment>;
+
+const same = (a: unknown, b: unknown) =>
+  JSON.stringify(a instanceof Date ? a.toISOString() : a ?? null) === JSON.stringify(b instanceof Date ? b.toISOString() : b ?? null);
+
+/** Names of instruction fields that differ between two versions of a shipment. */
+export function instructionChanges(before: Shipment, after: Shipment): string[] {
+  return INSTRUCTION_FIELDS.filter((k) => !same(before[k], after[k]));
 }

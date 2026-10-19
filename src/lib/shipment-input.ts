@@ -179,17 +179,39 @@ export const SHIPMENT_FORM_KEYS = [
 
 export type FieldErrors = Partial<Record<string, string>>;
 
+/**
+ * Pick-up instruction fields the transport company cannot work without. Checked on the form only
+ * (not the spreadsheet import), for new shipments and for edits before the pick-up is done.
+ */
+export function missingInstructionFields(d: ShipmentInput): FieldErrors {
+  const e: FieldErrors = {};
+  if (d.cargoType === "FCL") {
+    if (!d.positioningAt) e.positioningAt = "Positioning date and time is required for FCL";
+    if (!d.portOfLoading) e.portOfLoading = "Port of loading is required for FCL";
+  }
+  return e;
+}
+
 /** FormData -> validated input, or the first error per field. */
 export function parseShipmentForm(
   form: FormData,
+  opts: { requireInstruction?: boolean } = {},
 ): { ok: true; data: ShipmentInput } | { ok: false; fieldErrors: FieldErrors } {
   const raw = Object.fromEntries(SHIPMENT_FORM_KEYS.map((k) => [k, String(form.get(k) ?? "")]));
   const parsed = ShipmentInputSchema.safeParse(raw);
-  if (parsed.success) return { ok: true, data: parsed.data };
+  if (parsed.success) {
+    const missing = opts.requireInstruction ? missingInstructionFields(parsed.data) : {};
+    return Object.keys(missing).length ? { ok: false, fieldErrors: missing } : { ok: true, data: parsed.data };
+  }
   const fieldErrors: FieldErrors = {};
   for (const issue of parsed.error.issues) {
     const key = String(issue.path[0] ?? "_form");
     fieldErrors[key] ??= issue.message;
+  }
+  // Show the required-field errors together with the others, not on a second save.
+  if (opts.requireInstruction && raw.cargoType === "FCL") {
+    if (!raw.positioningAt.trim()) fieldErrors.positioningAt ??= "Positioning date and time is required for FCL";
+    if (!raw.portOfLoading.trim()) fieldErrors.portOfLoading ??= "Port of loading is required for FCL";
   }
   return { ok: false, fieldErrors };
 }

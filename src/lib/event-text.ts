@@ -64,7 +64,7 @@ export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string
     case "HBL_EDITED": return `HBL No. changed ${v.from} → ${v.to}`;
     case "REVERTED": return `Reverted: ${REVERT_LABEL[v?.kind] ?? v?.kind} (was ${when(v?.previous)})`;
     case "IMPORTED": return `Imported from the old spreadsheet (row ${v?.row})${v?.legacyJobNo ? `, old booking no. ${v.legacyJobNo}` : ""}`;
-    case "PICKUP_INSTRUCTION_SENT": return `Pick-up instruction emailed to transport (${(v?.to ?? []).join(", ")})`;
+    case "PICKUP_INSTRUCTION_SENT": return `${v?.revised ? "Revised pick-up instruction" : "Pick-up instruction"} emailed to transport (${(v?.to ?? []).join(", ")})`;
     case "PICKUP_INSTRUCTION_FAILED": return `Pick-up instruction NOT sent to ${(v?.to ?? []).join(", ")}: ${v?.error ?? "mail error"}`;
     case "NOTE": return v && typeof v === "object" && v.photo ? "Photo from field" : "Note";
     case "FIELD_CHANGED":

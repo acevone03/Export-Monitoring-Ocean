@@ -446,6 +446,13 @@ real data are **not** in the repository; tests use invented rows under the real 
 3. **Transport emails** are saved on the Transport page (AppSetting `TRANSPORT_EMAILS`). When CS create a shipment
    (form or email intake), the instruction is emailed to all of them right after save. The shipment is saved even if
    the email fails; the result shows on the shipment page and the timeline, and "Send / Resend to transport" sends it again.
-   Edits do not resend automatically.
-4. **[ASSUMPTION]** "SOUT/ATI" in the request is South Harbor (ATI), listed as `SOUTH/ATI`.
+   Edits resend automatically (see 6).
+4. "SOUT/ATI" in the request is South Harbor (ATI), listed as `SOUTH/ATI` (confirmed by NNR 19-Oct-2026).
 5. **Reefers**: container sizes `20RF` and `40RF` added. In the NNR sheet export, 20RF goes in the 20FT column and 40RF in the 40FT column.
+6. **Subject** (NNR, 19-Oct-2026): `ATW for {shipper} / {booking no.} / {container size} / {HBL}`, e.g.
+   `ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905`. Blank parts are left out; LCL shows `LCL 6 PALLETS`.
+   **Revised instructions**: when an edit (or an HBL change) touches anything printed on the instruction and the cargo
+   has not been picked up, the instruction is emailed again with "REVISED" and the time of the previous one at the
+   top of the body. The subject stays in the ATW format. Edits after pick-up do not resend.
+7. **Required for FCL** (NNR, 19-Oct-2026): positioning date/time and port of loading, on new shipments, email-intake
+   confirmation, and edits before pick-up. Not required on the spreadsheet import or after pick-up.

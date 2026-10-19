@@ -81,7 +81,7 @@ export async function confirmIntakeAction(intakeId: string, _p: ShipmentFormStat
   } catch {
     return { error: "Intake not found." };
   }
-  const parsed = parseShipmentForm(form);
+  const parsed = parseShipmentForm(form, { requireInstruction: true });
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
 
   // Claim the intake first so a double click cannot create two shipments.

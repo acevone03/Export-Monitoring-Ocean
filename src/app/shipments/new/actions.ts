@@ -12,7 +12,7 @@ import { sendPickupInstruction } from "@/lib/pickup-instruction";
 
 export async function createShipmentAction(_prev: ShipmentFormState, form: FormData): Promise<ShipmentFormState> {
   const user = await requireUser(["CS", "SUPERVISOR"]);
-  const parsed = parseShipmentForm(form);
+  const parsed = parseShipmentForm(form, { requireInstruction: true });
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
   let id: string;
   try {

@@ -22,6 +22,7 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
       </div>
       <p className="text-sm text-slate-600">
         Milestones (pick-up done, FSI, uploads, payments, departure) are recorded from the shipment page, not here.
+        {!s.actualPickupAt && " If you change anything on the pick-up instruction, the revised instruction is emailed to transport when you save."}
       </p>
       <ShipmentForm
         action={updateShipmentAction.bind(null, id)}
@@ -32,6 +33,7 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
         destinations={destinations}
         initial={toFormValues(s)}
         hblNo={s.hblNo}
+        requireInstruction={!s.actualPickupAt}
       />
     </div>
   );

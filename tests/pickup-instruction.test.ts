@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createShipment, type Actor } from "@/lib/shipments";
 import { parseShipmentForm } from "@/lib/shipment-input";
-import { buildInstructionMail, getTransportEmails, parseEmailList, sendPickupInstruction, setTransportEmails } from "@/lib/pickup-instruction";
+import { buildInstructionMail, getTransportEmails, instructionChanges, parseEmailList, sendPickupInstruction, setTransportEmails } from "@/lib/pickup-instruction";
 import { formatInstructionDate, formatInstructionDateTime, fromManila } from "@/lib/time";
 import { prisma, fixtures, input } from "./helpers";
 
@@ -75,6 +75,21 @@ describe("pick-up instruction fields", () => {
   });
 });
 
+describe("required for FCL", () => {
+  it("needs positioning and port of loading on new FCL shipments only", () => {
+    const missing = parseShipmentForm(form({}), { requireInstruction: true });
+    expect(!missing.ok && missing.fieldErrors).toMatchObject({ positioningAt: expect.any(String), portOfLoading: expect.any(String) });
+    expect(parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", portOfLoading: "SUBIC" }), { requireInstruction: true }).ok).toBe(true);
+    expect(parseShipmentForm(form({ cargoType: "LCL", lclQty: "2", lclUnit: "BOX" }), { requireInstruction: true }).ok).toBe(true);
+    expect(parseShipmentForm(form({})).ok).toBe(true); // not required unless asked (e.g. after pick-up)
+  });
+
+  it("lists the required fields together with other errors", () => {
+    const r = parseShipmentForm(form({ shipperId: "" }), { requireInstruction: true });
+    expect(!r.ok && Object.keys(r.fieldErrors).sort()).toEqual(["portOfLoading", "positioningAt", "shipperId"]);
+  });
+});
+
 describe("transport emails", () => {
   it("parses a list, dropping duplicates and flagging bad ones", () => {
     expect(parseEmailList("a@x.com, B@x.com\nb@x.com; nope")).toEqual({ emails: ["a@x.com", "B@x.com"], invalid: ["nope"] });
@@ -102,11 +117,30 @@ describe("transport emails", () => {
     const files = await readdir(process.env.OUTBOX_DIR!);
     const mail = JSON.parse(await readFile(path.join(process.env.OUTBOX_DIR!, files[0]), "utf8"));
     expect(mail.to).toEqual(["dispatch@truck.test"]);
-    expect(mail.subject).toContain(s.hblNo!);
+    expect(mail.subject).toBe(`ATW for ${f.shipper.name} / MAEU123 / 1x40HC / ${s.hblNo}`);
     expect(mail.text).toContain("13/NOV/2026 13:00H");
     expect(mail.text).toContain("SOUTH/ATI");
     expect(mail.text).toContain("1x40HC");
     expect(mail.text).toContain("MAEU123");
+  });
+
+  it("sends a REVISED instruction after the first one, and only then", async () => {
+    await setTransportEmails(prisma, ["dispatch@truck.test"]);
+    const s = await createShipment(prisma, input({ shipperId: f.shipper.id, assignedCsId: f.cs.id }), cs, { now });
+    await sendPickupInstruction(prisma, s.id, f.cs.id, now, { revised: true }); // nothing sent before: not "revised"
+    await sendPickupInstruction(prisma, s.id, f.cs.id, now, { revised: true });
+    const evs = await prisma.milestoneEvent.findMany({ where: { shipmentId: s.id, type: "PICKUP_INSTRUCTION_SENT" }, orderBy: { id: "asc" } });
+    expect(evs.map((e) => JSON.parse(e.value!).revised).sort()).toEqual([false, true]);
+    const full = await prisma.shipment.findUniqueOrThrow({ where: { id: s.id }, include: { shipper: true } });
+    const mail = buildInstructionMail(full, { revised: true, previousSentAt: fromManila(2026, 10, 19, 9, 0) });
+    expect(mail.text).toContain("REVISED PICK-UP INSTRUCTION (FCL)");
+    expect(mail.text).toContain("19/OCT/2026 09:00H");
+  });
+
+  it("detects edits that change the instruction", async () => {
+    const s = await createShipment(prisma, input({ shipperId: f.shipper.id, assignedCsId: f.cs.id }), cs, { now });
+    expect(instructionChanges(s, { ...s, carrierName: "Other line" })).toEqual([]);
+    expect(instructionChanges(s, { ...s, positioningAt: now, containerPlan: [{ size: "20RF", qty: 1 }] })).toEqual(["containerPlan", "positioningAt"]);
   });
 
   it("escapes HTML in the email", async () => {

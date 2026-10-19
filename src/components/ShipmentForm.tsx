@@ -77,9 +77,11 @@ type Props = {
   initialShipperName?: string;
   /** HBL No. of an existing shipment (edit). New shipments get theirs on save. */
   hblNo?: string | null;
+  /** Positioning and port of loading must be filled for FCL (new shipments, and edits before pick-up). */
+  requireInstruction?: boolean;
 };
 
-export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo }: Props) {
+export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo, requireInstruction = isNew }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const err = state.fieldErrors ?? {};
@@ -238,15 +240,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
 
         {cargoType === "FCL" ? (
           <>
-            <Field label="Positioning date and time" error={err.positioningAt}>
-              <input className="input" type="datetime-local" name="positioningAt" defaultValue={v("positioningAt")} onChange={(e) => setPositioningPreview(e.target.value)} />
+            <Field label={`Positioning date and time${requireInstruction ? " *" : ""}`} error={err.positioningAt}>
+              <input className="input" type="datetime-local" name="positioningAt" required={requireInstruction} defaultValue={v("positioningAt")} onChange={(e) => setPositioningPreview(e.target.value)} />
               {positioningPreview && <p className="mt-1 font-mono text-xs text-slate-500">{formatInstructionDateTime(parseManilaInput(positioningPreview))}</p>}
             </Field>
             <Field label="Container yard" error={err.containerYard}>
               <input className="input" name="containerYard" defaultValue={v("containerYard")} placeholder="Where to get the empty" />
             </Field>
-            <Field label="Port of loading" error={err.portOfLoading}>
-              <select className="input" name="portOfLoading" defaultValue={v("portOfLoading")}>
+            <Field label={`Port of loading${requireInstruction ? " *" : ""}`} error={err.portOfLoading}>
+              <select className="input" name="portOfLoading" required={requireInstruction} defaultValue={v("portOfLoading")}>
                 <option value="">Choose…</option>
                 {PORTS_OF_LOADING.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>

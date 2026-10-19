@@ -31,11 +31,11 @@ export default async function ShipmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string; pi?: string }>;
+  searchParams: Promise<{ created?: string; pi?: string; revised?: string }>;
 }) {
   const user = await requireUser(["CS", "SUPERVISOR"]);
   const { id } = await params;
-  const { created, pi } = await searchParams;
+  const { created, pi, revised } = await searchParams;
   await assertShipmentAccess(user, id);
   const s = await prisma.shipment
     .findUnique({
@@ -79,12 +79,17 @@ export default async function ShipmentPage({
           {pi === "sent" && <> Pick-up instruction emailed to transport ({transportEmails.join(", ")}).</>}
         </div>
       )}
-      {created && pi === "no_recipients" && (
+      {revised && pi === "sent" && (
+        <div className="rounded-md border border-green-300 bg-green-50 px-4 py-2 text-sm text-green-900">
+          Saved. The pick-up instruction details changed, so the revised instruction was emailed to transport ({transportEmails.join(", ")}).
+        </div>
+      )}
+      {(created || revised) && pi === "no_recipients" && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
           Pick-up instruction was not sent: no transport email is saved. <Link href="/transport" className="underline">Add one under Transport</Link>, then use “Send to transport” below.
         </div>
       )}
-      {created && pi === "failed" && (
+      {(created || revised) && pi === "failed" && (
         <div className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-900">
           Pick-up instruction could not be emailed (see the timeline). Use “Send to transport” below to try again.
         </div>
