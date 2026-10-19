@@ -147,7 +147,14 @@ export async function monthlyWorkbook(r: MonthlyReport, shipments: ExportShipmen
     ["Arrastre paid on time", r.arrastre.onTime],
     ["Arrastre paid late", r.arrastre.late],
     ["Arrastre unpaid and overdue", r.arrastre.unpaidOverdue],
+    ["Arrastre payments made this month", r.payments.arrastrePaid],
+    ["E-track payments made this month", r.payments.etrackPaid],
+    ["Departed this month, E-track not paid", r.payments.etrackUnpaidDeparted],
   ], { startRow: 4 });
+
+  const pay = wb.addWorksheet("Payments", { views: [{ state: "frozen", ySplit: 1 }] });
+  table(pay, [{ header: "Paid", width: 18 }, { header: "Payment", width: 12 }, { header: "Job No.", width: 16 }, { header: "HBL No.", width: 20 }, { header: "Shipper", width: 30 }, { header: "CS", width: 16 }],
+    r.payments.rows.map((p) => [p.paidAt, p.what, p.jobNo, p.hblNo ?? "", p.shipper, p.cs]));
 
   const ot = wb.addWorksheet("On-time rate");
   table(ot, [{ header: "Deadline", width: 24 }, { header: "On time" }, { header: "Late" }, { header: "Open & overdue" }, { header: "Total" }, { header: "On-time %" }],

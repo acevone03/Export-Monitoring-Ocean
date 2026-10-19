@@ -180,3 +180,29 @@ describe("daily report schedule", () => {
     delete process.env.OUTBOX_DIR;
   });
 });
+
+describe("arrastre and E-track payments in the reports", () => {
+  it("daily: lists payments made yesterday/today and E-track still unpaid after pick-up", () => {
+    const paidToday = ship({ requestedPickupAt: t(-30), actualPickupAt: t(-30), arrastrePaidAt: t(-1), etrackPaidAt: t(-2) });
+    const pickedUnpaid = ship({ requestedPickupAt: t(-30), actualPickupAt: t(-30) });
+    const notPicked = ship({ requestedPickupAt: t(30) });
+    const oldPayment = ship({ requestedPickupAt: t(-100), actualPickupAt: t(-100), etrackPaidAt: t(-80) });
+    const r = buildDailyReport([paidToday, pickedUnpaid, notPicked, oldPayment], now);
+    const sec = (k: string) => r.sections.find((s) => s.key === k)!.items;
+    expect(sec("payments").map((i) => [i.jobNo, i.what]).sort()).toEqual([[paidToday.jobNo, "Arrastre paid"], [paidToday.jobNo, "E-track paid"]].sort());
+    const etrackPending = sec("pending").filter((i) => i.what === "E-track payment").map((i) => i.jobNo);
+    expect(etrackPending).toEqual([pickedUnpaid.jobNo]);
+  });
+
+  it("monthly: counts and lists payments made in the month", () => {
+    const oct = (d: number, h = 9) => fromManila(2026, 10, d, h);
+    const rows = [
+      ship({ createdAt: oct(1), arrastrePaidAt: oct(5), etrackPaidAt: oct(6), atdMnl: oct(7), status: "DEPARTED" }),
+      ship({ createdAt: oct(1), atdMnl: oct(8), status: "DEPARTED" }), // departed without E-track
+      ship({ createdAt: oct(1), etrackPaidAt: fromManila(2026, 9, 30, 9) }), // September: not counted
+    ];
+    const r = buildMonthlyReport(rows, "2026-10", fromManila(2026, 10, 20, 9));
+    expect(r.payments).toMatchObject({ arrastrePaid: 1, etrackPaid: 1, etrackUnpaidDeparted: 1 });
+    expect(r.payments.rows.map((p) => p.what)).toEqual(["Arrastre", "E-track"]);
+  });
+});

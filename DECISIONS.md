@@ -470,7 +470,8 @@ real data are **not** in the repository; tests use invented rows under the real 
    They can be recorded after the shipment is closed (billing often comes later), not on cancelled shipments, and a
    supervisor can revert them.
 5. **Unbilled** tab: every non-cancelled shipment without step 13, split into "Departed, not billed" (with days since ATD;
-   amber from 3 days, red from 7) and "Not yet departed". The menu badge counts departed-not-billed. CS see their own
+   amber from 3 days, red from 7) and "Not yet departed". It shows shipping line payment; E-track and arrastre
+   belong to the reports instead (NNR, 19-Oct-2026, see 6). The menu badge counts departed-not-billed. CS see their own
    shipments; supervisors see all. Old spreadsheet history is left out.
 
 ## Logo and dark mode (19-Oct-2026)
@@ -481,3 +482,7 @@ real data are **not** in the repository; tests use invented rows under the real 
    Windows). The choice is remembered per browser. Dark mode works by flipping the colour scale in `globals.css`
    (50↔950, 100↔900, …) rather than restyling each page, so new pages get it automatically. Emails and Excel files
    are not affected.
+6. **Arrastre and E-track in the reports** (NNR, 19-Oct-2026). Daily: new section "Arrastre and E-track paid (yesterday
+   and today)", and E-track joins the pending list once the cargo is picked up (it has no deadline of its own).
+   Monthly: counts of arrastre and E-track payments made in the month, departures in the month without E-track, and a
+   list of the payments (also a "Payments" sheet in the Excel). The Excel raw sheet has an E-TRACK PAID column.

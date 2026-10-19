@@ -113,4 +113,5 @@ export const EXTRA_COLUMNS: Array<{ header: string; value: (s: SheetShipment) =>
   { header: "PRE-ADVISE SENT", value: (s) => s.preadviseSentAt, width: 14 },
   { header: "DECLARATION STATUS", value: (s) => s.exportDeclarationStatus, width: 14 },
   { header: "BOC UPLOAD DEADLINE", value: (s) => s.bocDeadlineAt, width: 14 },
+  { header: "E-TRACK PAID", value: (s) => s.etrackPaidAt, width: 14 },
 ];

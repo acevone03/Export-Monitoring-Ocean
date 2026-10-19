@@ -69,7 +69,7 @@ function Table({ title, rows, now, showAge, empty }: { title: string; rows: Row[
   const cargo = (s: Row) =>
     s.cargoType === "FCL" ? containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null) : `LCL ${s.lclQty ?? ""}`;
   const yes = (d: Date | null) => (d ? <span className="text-green-700">{formatDate(d)}</span> : <span className="text-slate-400">—</span>);
-  const heads = ["HBL", "Job No.", "Shipper", "Cargo", "ETD", "ATD", ...(showAge ? ["Days since ATD"] : []), "E-track paid", "Shipping line paid", "CS", "Status"];
+  const heads = ["HBL", "Job No.", "Shipper", "Cargo", "ETD", "ATD", ...(showAge ? ["Days since ATD"] : []), "Shipping line paid", "CS", "Status"];
   return (
     <section className="space-y-2">
       <h2 className="font-semibold">{title} ({rows.length})</h2>
@@ -92,7 +92,6 @@ function Table({ title, rows, now, showAge, empty }: { title: string; rows: Row[
                   {showAge && (
                     <td className={`px-3 py-2 font-medium ${age >= 7 ? "text-red-700" : age >= 3 ? "text-amber-700" : ""}`}>{age}</td>
                   )}
-                  <td className="whitespace-nowrap px-3 py-2">{yes(s.etrackPaidAt)}</td>
                   <td className="whitespace-nowrap px-3 py-2">{yes(s.shippingLinePaidAt)}</td>
                   <td className="whitespace-nowrap px-3 py-2">{s.assignedCs.name}</td>
                   <td className="whitespace-nowrap px-3 py-2">{STATUS_LABEL[s.status]}</td>
