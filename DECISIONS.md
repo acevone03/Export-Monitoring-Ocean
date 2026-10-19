@@ -412,3 +412,24 @@ real data are **not** in the repository; tests use invented rows under the real 
 4. "PART OF 7002" = belongs to shipment 7002: yes.
 5. The sheet is in booking order: yes.
 6. Old `MNL…` HBLs stay as written: yes.
+
+## Shipper codes, pick-up address auto-fill, Scripture (19-Oct-2026)
+
+1. **Shipper code**: every shipper gets a permanent code `SHP-0001`, `SHP-0002`, … from its own
+   counter (`NumberSequence` key `SHIPPER`), the same way Job and HBL numbers are issued. Codes are never
+   reused or edited. Existing shippers were numbered in the order they were created (migration
+   `20261019090000_shipper_code_pickup_address`).
+2. **No repeated shipper names**: a new shipper is refused when its name matches an existing one ignoring
+   case, spacing, punctuation and Inc/Corp/Co/Ltd/Phils (the same rule the import uses), e.g.
+   "Food Flow, Inc." = "FOODFLOW INC". The error names the existing code. All creation goes through
+   `src/lib/shippers.ts` (Shippers page, import, seed).
+3. **[ASSUMPTION] "Client" = the shipper.** On a new shipment, typing the shipper's name *or code*
+   fills the shipper, its contact line and a new per-shipment **Pick-up address** from the shipper's
+   default address. CS can overwrite the address for one shipment; "Use the shipper's address" puts it back.
+   Existing shipments got their shipper's default address. The field link and shipment page show it.
+4. **Scripture**: the Psalms and the writings of the apostles and Paul (Matthew, John, Acts, Romans to
+   Hebrews, James, 1–2 Peter, 1–3 John, Jude, Revelation), King James Version (public domain, from
+   github.com/aruljohn/Bible-kjv, MIT). A verse of the day shows under the menu on every page and on the
+   field link; it changes at Manila midnight and cycles through 100 chosen verses. `/scripture` has the
+   full text by book and chapter, and a word search. Mark and Luke (not written by apostles) are left out;
+   add them in `scripts/gen-scripture.mjs` if wanted.

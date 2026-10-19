@@ -84,7 +84,7 @@ export async function createShipment(
 // Planning fields editable from the form. Milestone timestamps are NOT here:
 // they only change through recordMilestone so each one is a deliberate, logged act.
 const EDITABLE: Array<keyof ShipmentInput> = [
-  "shipperId", "consigneeName", "destinationPort", "pod", "cargoType", "containerPlan", "lclQty", "lclUnit",
+  "shipperId", "consigneeName", "pickupAddress", "destinationPort", "pod", "cargoType", "containerPlan", "lclQty", "lclUnit",
   "requestedPickupAt", "fsiCutoffAt", "preadviseCutoffAt", "etdMnl", "eta", "arrastreResponsibility",
   "carrierName", "carrierBookingRef", "carrierRemarks", "assignedCsId",
   "arrastreCutoffAt", "podCode", "declarationBy", "declarationForwarder", "partOfHblNo",

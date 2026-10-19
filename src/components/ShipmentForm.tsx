@@ -7,13 +7,23 @@ import { podCodeFor } from "@/lib/pod-codes";
 // `values` echoes the submitted fields on error: React 19 resets the form after an
 // action, and uncontrolled fields reset to their defaultValue, so we feed it back.
 export type ShipmentFormState = { error?: string; fieldErrors?: FieldErrors; values?: Record<string, string> };
-export type ShipperOption = { id: string; name: string; defaultArrastre: "NNR" | "SHIPPER" };
+export type ShipperOption = {
+  id: string;
+  code: string;
+  name: string;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  defaultPickupAddress: string | null;
+  defaultArrastre: "NNR" | "SHIPPER";
+};
 export type CsOption = { id: string; name: string };
 type Container = { size: "20" | "40" | "40HC"; qty: number };
 
 export type ShipmentFormValues = {
   shipperId: string;
   consigneeName: string;
+  pickupAddress: string;
   destinationPort: string;
   pod: string;
   cargoType: "FCL" | "LCL";
@@ -59,6 +69,12 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
 
   const [shipperName, setShipperName] = useState(shippers.find((s) => s.id === initial.shipperId)?.name ?? initialShipperName ?? "");
   const [shipperId, setShipperId] = useState(initial.shipperId);
+  const shipper = shippers.find((s) => s.id === shipperId) ?? null;
+  // Pick-up address follows the chosen shipper until CS types their own.
+  const [pickupAddress, setPickupAddress] = useState(
+    initial.pickupAddress || (isNew ? shippers.find((s) => s.id === initial.shipperId)?.defaultPickupAddress ?? "" : ""),
+  );
+  const [addressTouched, setAddressTouched] = useState(!isNew);
   const [arrastre, setArrastre] = useState(initial.arrastreResponsibility);
   // HBL destination code follows the destination/POD until CS types their own.
   const [podCode, setPodCode] = useState(initial.podCode || podCodeFor(initial.pod) || podCodeFor(initial.destinationPort) || "");
@@ -75,12 +91,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
     initial.containerPlan.length ? initial.containerPlan : [{ size: "40HC", qty: 1 }],
   );
 
-  function pickShipper(name: string) {
-    setShipperName(name);
-    const match = shippers.find((s) => s.name.toLowerCase() === name.trim().toLowerCase());
+  function pickShipper(typed: string) {
+    const t = typed.trim().toLowerCase();
+    // Match the name, or the code on its own ("shp-0003", "SHP-0003").
+    const match = t ? shippers.find((s) => s.name.toLowerCase() === t || s.code.toLowerCase() === t) ?? null : null;
+    setShipperName(match && match.code.toLowerCase() === t ? match.name : typed);
     setShipperId(match?.id ?? "");
-    // Default arrastre from the shipper master, unless CS already chose one.
+    // Default arrastre and pick-up address from the shipper master, unless CS already changed them.
     if (match && !arrastreTouched) setArrastre(match.defaultArrastre);
+    if (!addressTouched) setPickupAddress(match?.defaultPickupAddress ?? "");
   }
 
   const usedSizes = new Set(containers.map((c) => c.size));
@@ -105,16 +124,49 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             list="shipper-list"
             value={shipperName}
             onChange={(e) => pickShipper(e.target.value)}
-            placeholder="Start typing a shipper name"
+            placeholder="Type a shipper name or code (SHP-0001)"
             autoFocus={isNew}
             autoComplete="off"
             required
           />
           <datalist id="shipper-list">
-            {shippers.map((s) => <option key={s.id} value={s.name} />)}
+            {shippers.map((s) => <option key={s.id} value={s.name} label={s.code} />)}
           </datalist>
+          {shipper && (
+            <p className="mt-1 text-xs text-slate-600">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800">{shipper.code}</span>
+              {[shipper.contactPerson, shipper.phone, shipper.email].filter(Boolean).map((x) => ` · ${x}`).join("")}
+            </p>
+          )}
           {shipperName && !shipperId && (
-            <p className="mt-1 text-xs text-amber-700">Not in the shipper list. Pick an existing shipper or add it under Shippers.</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Not in the shipper list. Type a name or code (e.g. SHP-0001), or <a href="/shippers" target="_blank" className="underline">add it under Shippers</a>.
+            </p>
+          )}
+        </Field>
+        <Field label="Pick-up address" error={err.pickupAddress} span={2}>
+          <input
+            className="input"
+            name="pickupAddress"
+            value={pickupAddress}
+            maxLength={300}
+            placeholder={shipper ? "No default address saved for this shipper" : "Fills in when you pick the shipper"}
+            onChange={(e) => {
+              setPickupAddress(e.target.value);
+              setAddressTouched(true);
+            }}
+          />
+          {shipper?.defaultPickupAddress && pickupAddress !== shipper.defaultPickupAddress && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => {
+                setPickupAddress(shipper.defaultPickupAddress ?? "");
+                setAddressTouched(false);
+              }}
+            >
+              Use the shipper&apos;s address
+            </button>
           )}
         </Field>
         <Field label="Consignee (optional)" error={err.consigneeName} span={2}>

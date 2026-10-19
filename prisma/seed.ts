@@ -12,6 +12,7 @@ import { deriveStatus } from "../src/lib/status";
 import { DEFAULT_RULES, computeCachedDeadlines } from "../src/lib/deadlines";
 import { EVENT } from "../src/lib/milestones";
 import { HOUR, DAY } from "../src/lib/time";
+import { createShipper } from "../src/lib/shippers";
 
 const prisma = new PrismaClient();
 export const DEMO_PASSWORD = "nnr-demo-2026";
@@ -48,7 +49,7 @@ async function main() {
     { name: "Bicol Abaca Fibers", contactPerson: "Liza Mendoza", email: "sales@bicolabaca.test", phone: "+6352000505", defaultPickupAddress: "Warehouse 3, Sucat, Parañaque City", defaultArrastre: "NNR" },
   ];
   const shippers = [];
-  for (const s of shipperData) shippers.push(await prisma.shipper.create({ data: s }));
+  for (const s of shipperData) shippers.push(await createShipper(prisma, s)); // SHP-0001 …
 
   // Two CUSTOMER users exist only to prove the data model supports the post-MVP portal.
   // They are inactive and login rejects the CUSTOMER role in the MVP.
@@ -180,6 +181,7 @@ async function main() {
           cargoType: s.cargoType,
           shipperId: shipper.id,
           consigneeName: s.consigneeName,
+          pickupAddress: shipper.defaultPickupAddress,
           destinationPort: s.destinationPort,
           pod: s.pod,
           containerPlan: s.containerPlan ?? Prisma.DbNull,

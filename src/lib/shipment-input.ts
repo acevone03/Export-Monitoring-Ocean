@@ -34,6 +34,8 @@ export const ShipmentInputSchema = z
   .object({
     shipperId: z.string().uuid("Pick a shipper from the list"),
     consigneeName: optText(200),
+    // Optional so callers that predate the field (the spreadsheet import) still validate.
+    pickupAddress: z.string().trim().max(300, "Address is too long").optional().transform((v) => v || null),
     destinationPort: text(100).min(1, "Destination is required"),
     pod: text(100).min(1, "Port of discharge is required"),
     cargoType: z.enum(["FCL", "LCL"]),
@@ -109,6 +111,7 @@ export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
 export const SHIPMENT_FORM_KEYS = [
   "shipperId",
   "consigneeName",
+  "pickupAddress",
   "destinationPort",
   "pod",
   "cargoType",

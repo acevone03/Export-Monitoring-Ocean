@@ -81,6 +81,7 @@ export function extractionToForm(
     values: {
       shipperId: shipper?.id ?? "",
       consigneeName: "",
+      pickupAddress: "", // the form fills it from the matched shipper
       destinationPort: destination,
       pod: destination,
       cargoType,

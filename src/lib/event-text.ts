@@ -3,7 +3,7 @@ import { formatDateTime } from "./time";
 
 // Human-readable line for the shipment timeline.
 const FIELD_LABEL: Record<string, string> = {
-  shipperId: "Shipper", consigneeName: "Consignee", destinationPort: "Destination", pod: "POD",
+  shipperId: "Shipper", consigneeName: "Consignee", pickupAddress: "Pick-up address", destinationPort: "Destination", pod: "POD",
   cargoType: "Cargo type", containerPlan: "Containers", lclQty: "LCL qty", lclUnit: "LCL unit",
   requestedPickupAt: "Requested pick-up", fsiCutoffAt: "FSI cut-off", preadviseCutoffAt: "Pre-advise cut-off",
   etdMnl: "ETD MNL", eta: "ETA", arrastreResponsibility: "Arrastre", carrierName: "Carrier",

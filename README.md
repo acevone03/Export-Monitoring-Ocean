@@ -41,6 +41,17 @@ Rows older than the history cut-off (default 30 days) come in as closed history,
 Rows with problems are listed and downloadable as "rows to fix"; re-uploading is safe.
 How each column is read: [`docs/import.md`](docs/import.md). The board and the Excel raw sheet use the same columns.
 
+### Shippers and new shipments
+
+Every shipper has a permanent code (`SHP-0001`, …) assigned when it is added, and a name can only be added
+once (case, punctuation and Inc/Corp are ignored). On **New shipment**, type the shipper's name or code:
+the contact line and pick-up address fill in from the shipper (the address can be changed per shipment).
+
+### Scripture
+
+A verse of the day (Psalms and the writings of the apostles and Paul, KJV) shows under the menu; **Scripture**
+(`/scripture`) has the full text and a word search. To rebuild the text file: see `scripts/gen-scripture.mjs`.
+
 ### Process map
 
 `/process` in the app, and [`docs/process-map.md`](docs/process-map.md) (Mermaid). Both come from

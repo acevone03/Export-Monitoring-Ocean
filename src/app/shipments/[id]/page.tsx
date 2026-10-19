@@ -116,7 +116,8 @@ export default async function ShipmentPage({
         <section className="card lg:col-span-2">
           <h2 className="mb-3 font-semibold">Details</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-            <Row k="Shipper" v={s.shipper.name} />
+            <Row k="Shipper" v={`${s.shipper.code} · ${s.shipper.name}`} />
+            <Row k="Pick-up address" v={s.pickupAddress ?? s.shipper.defaultPickupAddress} />
             <Row k="Consignee" v={s.consigneeName} />
             <Row k="Destination" v={s.destinationPort} />
             <Row k="POD" v={s.pod} />

@@ -6,7 +6,7 @@ import { deriveStatus } from "../status";
 import { computeCachedDeadlines, DEFAULT_RULES } from "../deadlines";
 import { HBL_COUNTER_KEY, NNR_HBL_PARTS_RE, nextHblNo, nextJobNo } from "../numbering";
 import { EVENT } from "../milestones";
-import { normalizeName } from "../intake/to-form";
+import { findOrCreateShipper, shipperKey } from "../shippers";
 import { podCodeFor } from "../pod-codes";
 import { cellText, ImportCellError } from "./parse";
 import { readTable } from "./table";
@@ -90,9 +90,6 @@ const yearOf = (p: ParsedRow | undefined) => {
   return d ? new Date(d.getTime() + 8 * 3_600_000).getUTCFullYear() : null;
 };
 
-/** Shipper name key ignoring case, punctuation, spaces and Inc/Corp/Co: "FOODFLOW INC" = "Food Flow". */
-const shipperKey = (name: string) => normalizeName(name).replace(/[^a-z0-9]/g, "");
-
 export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOptions): Promise<ImportResult> {
   const table = await readTable(buffer, opts.fileName);
   const layout = detectLayout(table);
@@ -156,7 +153,7 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
   result.startYear = parsed.length && layout.kind === "nnr" ? yearOf(parsed.find((p) => p.dates.requestedPickup || p.dates.etd)) : null;
 
   // ---------- validate and prepare
-  const shippers = await db.shipper.findMany({ select: { id: true, name: true, defaultArrastre: true } });
+  const shippers = await db.shipper.findMany({ select: { id: true, name: true, defaultArrastre: true, defaultPickupAddress: true } });
   const users = await db.user.findMany({ where: { active: true, role: { in: ["CS", "SUPERVISOR"] } }, select: { id: true, name: true, email: true } });
   const ruleRows = await db.deadlineRule.findMany();
   const rules = ruleRows.length ? ruleRows : DEFAULT_RULES;
@@ -290,7 +287,7 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
       row: p.row, jobNo: p.jobNo, hblNo: p.hblNo, directBl: p.directBl, partOf: p.partOf, shipperName, shipperId: shipper?.id ?? null, createdAt,
       fingerprint: [shipperKey(shipperName), destination.toUpperCase(), d.requestedPickup?.toISOString() ?? "", JSON.stringify(p.cargo)].join("|"),
       data: {
-        consigneeName: f.consigneeName, destinationPort: f.destinationPort, pod: f.pod, podCode: p.directBl ? null : f.podCode, cargoType: f.cargoType,
+        consigneeName: f.consigneeName, pickupAddress: shipper?.defaultPickupAddress ?? null, destinationPort: f.destinationPort, pod: f.pod, podCode: p.directBl ? null : f.podCode, cargoType: f.cargoType,
         containerPlan: f.containerPlan.length ? f.containerPlan : Prisma.DbNull, lclQty: f.lclQty, lclUnit: f.lclUnit,
         requestedPickupAt: f.requestedPickupAt, actualPickupAt: d.actualPickup ?? null,
         fsiCutoffAt: f.fsiCutoffAt, fsiSubmittedAt: d.fsiSubmitted ?? null,
@@ -322,7 +319,7 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
   // ---------- write
   const shipperIds = new Map<string, string>();
   for (const [k, name] of newShipperNames) {
-    const s = await db.shipper.upsert({ where: { name }, create: { name }, update: {} });
+    const s = await findOrCreateShipper(db, name); // new shippers get the next SHP- code
     shipperIds.set(k, s.id);
   }
   // Move the counters past every number kept from the file BEFORE generating new ones,

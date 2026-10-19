@@ -25,7 +25,7 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
   return {
     id: `s${n}`, jobNo: `EX-O-2610-${String(n).padStart(4, "0")}`, hblNo: `NNRMNLLAXF${String(9000 + n)}`,
     status: "PICKUP_SCHEDULED", cargoType: "FCL", containerPlan: [{ size: "40HC", qty: 1 }], lclQty: null, lclUnit: null,
-    destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, carrierName: "Maersk", carrierBookingRef: "B1",
+    destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, pickupAddress: null, carrierName: "Maersk", carrierBookingRef: "B1",
     carrierRemarks: null, arrastreResponsibility: "NNR", exportDeclarationStatus: "PENDING",
     requestedPickupAt: t(48), actualPickupAt: null, fsiCutoffAt: t(72), fsiSubmittedAt: null,
     preadviseCutoffAt: t(80), preadviseSentAt: null, bocDeadlineAt: t(48), bocUploadAt: null,

@@ -148,6 +148,10 @@ model Session {
 
 model Shipper {
   id                      String                 @id @default(uuid())
+  // Permanent customer code, e.g. SHP-0007. Assigned on creation from the "SHIPPER" counter, never reused.
+  code                    String                 @unique
+  // Unique as typed; createShipper also rejects names that differ only in case, spacing,
+  // punctuation or Inc/Corp/Co (see src/lib/shippers.ts).
   name                    String                 @unique
   contactPerson           String?
   email                   String?
@@ -176,6 +180,8 @@ model Shipment {
   shipperId     String
   shipper       Shipper @relation(fields: [shipperId], references: [id])
   consigneeName String?
+  // Where the field team picks up. Filled from the shipper's default address on the form; editable per shipment.
+  pickupAddress String?
 
   destinationPort String
   pod             String

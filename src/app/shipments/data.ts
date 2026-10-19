@@ -7,7 +7,7 @@ import type { ShipmentFormValues } from "@/components/ShipmentForm";
 
 export async function formOptions() {
   const [shippers, csUsers, used] = await Promise.all([
-    prisma.shipper.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, defaultArrastre: true } }),
+    prisma.shipper.findMany({ orderBy: { name: "asc" }, select: { id: true, code: true, name: true, contactPerson: true, phone: true, email: true, defaultPickupAddress: true, defaultArrastre: true } }),
     prisma.user.findMany({ where: { active: true, role: { in: ["CS", "SUPERVISOR"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.shipment.findMany({ distinct: ["destinationPort"], select: { destinationPort: true, pod: true } }),
   ]);
@@ -19,6 +19,7 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
   return {
     shipperId: s.shipperId,
     consigneeName: s.consigneeName ?? "",
+    pickupAddress: s.pickupAddress ?? "",
     destinationPort: s.destinationPort,
     pod: s.pod,
     cargoType: s.cargoType,
