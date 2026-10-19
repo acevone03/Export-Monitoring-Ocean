@@ -8,7 +8,7 @@ const base = {
   portOfLoading: "SUBIC", cyCutoffAt: fromManila(2026, 11, 13), positioningAt: fromManila(2026, 11, 13, 13), containerYard: "NYK CY",
   containerPlan: [{ size: "40HC", qty: 1 }], consigneeName: "Tokyo <Fresh>", etdMnl: fromManila(2026, 11, 15), atdMnl: null, eta: fromManila(2026, 11, 21),
   pickupAddress: null, cargoDescription: "Coconut", cargoDimensions: null, grossWeightKg: 24000, cbm: null, lclQty: null, lclUnit: null,
-  deliveryWarehouse: null, pickupRemarks: null, carrierRemarks: null, invoiceNo: "SI-1",
+  deliveryWarehouse: null, pickupRemarks: null, carrierRemarks: null, invoiceNo: "SI-1", fsiCutoffAt: fromManila(2026, 11, 13, 17),
   arrastreResponsibility: "NNR", bocDeadlineAt: fromManila(2026, 11, 12, 17), arrastreDeadlineAt: fromManila(2026, 11, 13, 12), arrastreCutoffAt: null,
   shipper: { code: "SHP-0001", name: "Luzon Coco", contactPerson: null, phone: null, defaultPickupAddress: "Calamba" }, assignedCs: { name: "Kyla Marie Risma" },
 } as unknown as BookingSheetShipment;
@@ -20,13 +20,15 @@ describe("booking sheet", () => {
       pic: "KYLA MARIE RISMA", load: "FCL 1x40HC", hblNo: "MAEU240001  (DIRECT)", placeOfLoading: "MNL · SUBIC",
       pickupDate: "12/NOV/2026 08:00H", carrierCutoff: "13/NOV/2026", etd: "15/NOV/2026", transitTime: "6 DAYS",
       shipperLines: ["Calamba"], grossWeight: "24,000 KGS", nnrPickup: true, billingInvoiceNo: "SI-1",
-      edCutoff: "12/NOV/2026 17:00H", arrastreCutoff: "13/NOV/2026 12:00H",
+      fsiCutoff: "13/NOV/2026 17:00H", edArrastreCutoff: "ED 12/NOV/2026 17:00H\nARR 13/NOV/2026 12:00H",
     });
   });
 
-  it("shows BY SHIPPER when the shipper pays arrastre", () => {
-    const d = bookingSheetData({ ...base, arrastreResponsibility: "SHIPPER" } as BookingSheetShipment, new Date());
-    expect(d.arrastreCutoff).toBe("BY SHIPPER");
+  it("shows one ED & arrastre cut-off when they match, or the ED one when the shipper pays arrastre", () => {
+    const same = bookingSheetData({ ...base, arrastreDeadlineAt: base.bocDeadlineAt } as BookingSheetShipment, new Date());
+    expect(same.edArrastreCutoff).toBe("12/NOV/2026 17:00H");
+    const shipperPays = bookingSheetData({ ...base, arrastreResponsibility: "SHIPPER" } as BookingSheetShipment, new Date());
+    expect(shipperPays.edArrastreCutoff).toBe("12/NOV/2026 17:00H");
   });
 
   it("escapes text and offers the print button", () => {

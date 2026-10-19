@@ -498,6 +498,6 @@ consolidator, consignee, ETD, onboard (ATD), ETA, transit time, routing, consol 
 tick, cargo dimension, number of cases/containers, gross weight, CBM, handling (positioning + remarks), billing invoice no.
 Not tracked by the system, so left blank to write in: vessel/voyage, notify, C/vessel, incoterms, tariffs, prepaid/collect,
 PO/SO, IDS, container/seal numbers, VGM, COO, and the transaction and operations checklists.
-Cut-offs on the sheet (NNR, 19-Oct-2026): next to CARRIER CUT OFF are **ED CUT OFF** (export declaration = the BOC
-portal upload deadline, FSI cut-off − 24h unless the rule is changed) and **ARRASTRE CUT OFF** ("BY SHIPPER" when the
-shipper pays arrastre).
+Cut-offs on the sheet (NNR, 19-Oct-2026): CARRIER CUT OFF, **FSI CUT OFF**, and one **ED & ARRASTRE CUT OFF** box. That box
+shows the arrastre cut-off (when NNR pays arrastre) and the ED cut-off (export declaration = the BOC portal upload deadline,
+FSI cut-off − 24h unless the rule is changed); one date when they are the same, both (ED … / ARR …) when they differ.

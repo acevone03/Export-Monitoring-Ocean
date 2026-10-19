@@ -25,8 +25,8 @@ export type BookingSheetData = {
   pickupDate: string;
   finalDestination: string;
   carrierCutoff: string;
-  edCutoff: string;
-  arrastreCutoff: string;
+  fsiCutoff: string;
+  edArrastreCutoff: string;
   shipper: string;
   shipperLines: string[];
   carrier: string;
@@ -52,6 +52,17 @@ export type BookingSheetData = {
 
 const num = (n: number | null, unit: string) => (n === null ? "" : `${n.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${unit}`);
 
+/**
+ * One box for both cut-offs (NNR, 19-Oct-2026): the arrastre cut-off when NNR pays arrastre, otherwise the
+ * ED (export declaration) cut-off, i.e. the BOC portal upload deadline. Both are shown if they differ.
+ */
+function edArrastre(s: BookingSheetShipment): string {
+  const ed = formatInstructionDateTime(s.bocDeadlineAt);
+  const arr = s.arrastreResponsibility === "SHIPPER" ? "" : formatInstructionDateTime(s.arrastreDeadlineAt ?? s.arrastreCutoffAt);
+  if (ed && arr && ed !== arr) return `ED ${ed}\nARR ${arr}`;
+  return arr || ed;
+}
+
 export function bookingSheetData(s: BookingSheetShipment, printedAt: Date): BookingSheetData {
   const fcl = s.cargoType === "FCL";
   const plan = containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null);
@@ -72,9 +83,8 @@ export function bookingSheetData(s: BookingSheetShipment, printedAt: Date): Book
     pickupDate: formatInstructionDateTime(s.requestedPickupAt),
     finalDestination: s.destinationPort,
     carrierCutoff: fcl ? formatInstructionDate(s.cyCutoffAt) : "",
-    // ED (export declaration) cut-off = BOC portal upload deadline (FSI cut-off − 24h by default).
-    edCutoff: formatInstructionDateTime(s.bocDeadlineAt),
-    arrastreCutoff: s.arrastreResponsibility === "SHIPPER" ? "BY SHIPPER" : formatInstructionDateTime(s.arrastreDeadlineAt ?? s.arrastreCutoffAt),
+    fsiCutoff: formatInstructionDateTime(s.fsiCutoffAt),
+    edArrastreCutoff: edArrastre(s),
     shipper: `${s.shipper.name}`,
     shipperLines: [address, contact].filter((x): x is string => !!x),
     carrier: [s.carrierName, !fcl ? s.consolidator : null].filter(Boolean).join(" / "),
@@ -143,7 +153,7 @@ html, body { margin: 0; background: #e5e7eb; color: #000; font-family: Calibri, 
 .lb { font-weight: 700; }
 .v { font-size: 8.5pt; font-weight: 700; color: #0b2a6b; padding-top: 1px; word-break: break-word; }
 .big .v { font-size: 12pt; text-align: center; }
-.cut .v { font-size: 7.5pt; white-space: nowrap; }
+.cut .v { font-size: 7.5pt; white-space: pre; }
 .cut .l { font-size: 5pt; }
 .sub { font-size: 7pt; font-weight: 400; color: #0b2a6b; }
 .cols { display: flex; border-bottom: 2px solid #000; }
@@ -200,8 +210,8 @@ export function bookingSheetHtml(d: BookingSheetData, backHref: string): string 
     ${cell('<span class="lb">Pick Up Date</span>', d.pickupDate, "", "width:21.2%")}
     ${cell('<span class="lb">Final Destination</span>', d.finalDestination, "", "width:20.5%")}
     ${cell("CARRIER CUT OFF DATE AND TIME", d.carrierCutoff, "cut", "width:15.6%")}
-    ${cell("ED CUT OFF DATE AND TIME", d.edCutoff, "cut", "width:15.2%")}
-    ${cell("ARRASTRE CUT OFF DATE AND TIME", d.arrastreCutoff, "cut", "width:15.2%")}
+    ${cell("FSI CUT OFF DATE AND TIME", d.fsiCutoff, "cut", "width:15.2%")}
+    ${cell("ED &amp; ARRASTRE CUT OFF", d.edArrastreCutoff, "cut", "width:15.2%")}
   </div>
   <div class="row">
     <div class="c" style="width:48%;min-height:30px"><div class="l lb">SHIPPER</div>${v(d.shipper)}${d.shipperLines.map((x) => `<div class="sub">${esc(x)}</div>`).join("")}</div>
