@@ -9,6 +9,8 @@ import { verseOfTheDay } from "@/lib/scripture";
 import { DEPARTED_UNBILLED_WHERE } from "@/lib/unbilled";
 import { shipmentScope } from "@/lib/access";
 import { logoutAction } from "./login/actions";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = { title: "NNR Export Monitor" };
 
@@ -25,7 +27,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const dev = user?.role === "SUPERVISOR" && devToolsEnabled();
 
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the theme script may add class="dark" before React loads.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         {simulated && (
           <div className="bg-amber-400 px-4 py-1 text-center text-sm font-medium text-amber-950">
@@ -36,7 +42,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user && (
           <header className="border-b border-slate-200 bg-white">
             <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-sm">
-              <Link href="/" className="font-semibold text-blue-800">NNR Export Monitor</Link>
+              <Link href="/" className="flex items-center gap-2 font-semibold text-blue-800">
+                <span className="logo-chip"><img src="/nnr-logo.png" alt="NNR" width={41} height={32} className="h-8 w-auto" /></span>
+                NNR Export Monitor
+              </Link>
               <Link href="/" className="text-slate-700 hover:text-blue-700">Board</Link>
               {can.editShipments(user) && (
                 <>
@@ -58,6 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/scripture" className="text-slate-700 hover:text-blue-700">Scripture</Link>
               {dev && <Link href="/dev/simulate-time" className="text-amber-700 hover:text-amber-900">Dev: time</Link>}
               <span className="ml-auto flex items-center gap-3">
+                <ThemeToggle />
                 {staff && (
                   <Link href="/notifications" className="relative text-slate-700 hover:text-blue-700" aria-label={`Notifications, ${unread} unread`}>
                     <span aria-hidden>🔔</span>

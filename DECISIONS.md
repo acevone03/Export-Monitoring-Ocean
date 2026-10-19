@@ -472,3 +472,12 @@ real data are **not** in the repository; tests use invented rows under the real 
 5. **Unbilled** tab: every non-cancelled shipment without step 13, split into "Departed, not billed" (with days since ATD;
    amber from 3 days, red from 7) and "Not yet departed". The menu badge counts departed-not-billed. CS see their own
    shipments; supervisors see all. Old spreadsheet history is left out.
+
+## Logo and dark mode (19-Oct-2026)
+
+1. NNR logo (`public/nnr-logo.png`) in the header, on the login page and on the field link; `src/app/icon.png` is the
+   browser-tab icon. The logo sits on a light chip so it reads in both themes. Both files load without login.
+2. **Theme switch** (☀️ Light / 🌙 Dark / 💻 System) in the header and on the login page. Default is System (follows
+   Windows). The choice is remembered per browser. Dark mode works by flipping the colour scale in `globals.css`
+   (50↔950, 100↔900, …) rather than restyling each page, so new pages get it automatically. Emails and Excel files
+   are not affected.

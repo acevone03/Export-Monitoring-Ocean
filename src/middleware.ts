@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 // Cheap gate: no session cookie -> login. Real validation happens in requireUser().
-const PUBLIC = [/^\/login/, /^\/f\//, /^\/_next\//, /^\/favicon/];
+// The logo and tab icon are also shown on the login and field-link pages (no session).
+const PUBLIC = [/^\/login/, /^\/f\//, /^\/_next\//, /^\/favicon/, /^\/nnr-logo\.png$/, /^\/icon(\.png)?$/];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

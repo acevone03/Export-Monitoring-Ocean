@@ -45,7 +45,10 @@ export default async function FieldPage({ params }: { params: Promise<{ token: s
   return (
     <div className="mx-auto max-w-md space-y-4 text-base">
       <header className="rounded-xl bg-white p-4 shadow-sm">
-        <p className="text-sm text-slate-500">NNR field update{link.assignee ? ` · for ${link.assignee.name}` : ""}</p>
+        <p className="flex items-center gap-2 text-sm text-slate-500">
+          <span className="logo-chip"><img src="/nnr-logo.png" alt="NNR" width={30} height={24} className="h-6 w-auto" /></span>
+          NNR field update{link.assignee ? ` · for ${link.assignee.name}` : ""}
+        </p>
         <h1 className="font-mono text-2xl font-bold">{s.jobNo}</h1>
         <p className="text-lg font-medium">{s.shipper.name}</p>
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[15px]">
