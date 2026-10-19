@@ -17,3 +17,7 @@ export function containerPlanText(plan: Array<{ size: string; qty: number }> | n
 
 /** Ports of loading on the FCL pick-up instruction. */
 export const PORTS_OF_LOADING = ["MICP/NORTH", "SOUTH/ATI", "PORT OF BATANGAS", "SUBIC"] as const;
+
+/** Incoterms 2020, in the usual order (E, F, C, D groups). */
+export const INCOTERMS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"] as const;
+export const FREIGHT_TERMS = ["PREPAID", "COLLECT"] as const;

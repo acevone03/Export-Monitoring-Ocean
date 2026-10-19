@@ -75,6 +75,18 @@ describe("pick-up instruction fields", () => {
   });
 });
 
+describe("commodity, freight terms, Incoterms, vessel", () => {
+  it("keeps the commodity for FCL and reads the booking-sheet fields", () => {
+    const r = parseShipmentForm(form({ cargoDescription: "Coconut", freightTerms: "PREPAID", incoterm: "FOB", vesselName: "MAERSK KOWLOON", voyageNo: "245S" }));
+    expect(r.ok && r.data).toMatchObject({ cargoDescription: "Coconut", freightTerms: "PREPAID", incoterm: "FOB", vesselName: "MAERSK KOWLOON", voyageNo: "245S" });
+  });
+
+  it("rejects values not in the lists", () => {
+    const r = parseShipmentForm(form({ freightTerms: "MAYBE", incoterm: "XYZ" }));
+    expect(!r.ok && Object.keys(r.fieldErrors).sort()).toEqual(["freightTerms", "incoterm"]);
+  });
+});
+
 describe("required for FCL", () => {
   it("needs positioning and port of loading on new FCL shipments only", () => {
     const missing = parseShipmentForm(form({}), { requireInstruction: true });

@@ -48,6 +48,7 @@ export function instructionRows(s: ShipmentWithShipper): Array<[string, string]>
     ["Requested pick-up", formatInstructionDateTime(s.requestedPickupAt)],
     ["Booking Number", s.carrierBookingRef ?? ""],
     ["HBL", s.hblNo ?? ""],
+    ["Commodity", s.cargoDescription ?? ""],
   ];
   const body: Array<[string, string]> =
     s.cargoType === "FCL"
@@ -63,7 +64,6 @@ export function instructionRows(s: ShipmentWithShipper): Array<[string, string]>
           ["Quantity", qtyText(s)],
           ["GW", num(s.grossWeightKg, "KGS")],
           ["CBM", num(s.cbm, "CBM")],
-          ["Description", s.cargoDescription ?? ""],
           ["Cargo Dimension", s.cargoDimensions ?? ""],
           ["Delivery Warehouse", s.deliveryWarehouse ?? ""],
         ];

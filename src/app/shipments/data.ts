@@ -53,6 +53,10 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     cargoDimensions: s.cargoDimensions ?? "",
     deliveryWarehouse: s.deliveryWarehouse ?? "",
     pickupRemarks: s.pickupRemarks ?? "",
+    vesselName: s.vesselName ?? "",
+    voyageNo: s.voyageNo ?? "",
+    freightTerms: s.freightTerms ?? "",
+    incoterm: s.incoterm ?? "",
   };
 }
 

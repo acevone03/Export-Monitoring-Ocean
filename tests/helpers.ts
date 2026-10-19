@@ -51,6 +51,10 @@ export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId
     cargoDimensions: null,
     deliveryWarehouse: null,
     pickupRemarks: null,
+    vesselName: null,
+    voyageNo: null,
+    freightTerms: null,
+    incoterm: null,
     ...o,
   };
 }

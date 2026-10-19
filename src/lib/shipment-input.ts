@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseManilaInput, startOfManilaDay } from "./time";
 import { podCodeFor, POD_CODE_RE } from "./pod-codes";
-import { CONTAINER_SIZES, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
+import { CONTAINER_SIZES, FREIGHT_TERMS, INCOTERMS, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
 
 // Validation for the shipment form (create and edit). Every API boundary that
 // writes shipment fields goes through ShipmentInputSchema.
@@ -126,6 +126,11 @@ export const ShipmentInputSchema = z
     deliveryWarehouse: instrText(200),
     // Both
     pickupRemarks: instrText(2000),
+    // Booking sheet: vessel, voyage, freight terms and Incoterms (all optional)
+    vesselName: instrText(100),
+    voyageNo: instrText(30),
+    freightTerms: z.string().optional().transform((v) => v || null).pipe(z.enum(FREIGHT_TERMS, "Choose Prepaid or Collect").nullable()),
+    incoterm: z.string().optional().transform((v) => v || null).pipe(z.enum(INCOTERMS, "Pick an Incoterm from the list").nullable()),
   })
   .superRefine((v, ctx) => {
     if (v.cargoType === "FCL") {
@@ -162,7 +167,7 @@ export const ShipmentInputSchema = z
     // FCL cut-off is the positioning date (NNR, 19-Oct-2026), so it is never entered separately.
     const cyCutoffAt = v.positioningAt ? startOfManilaDay(v.positioningAt) : null;
     return v.cargoType === "FCL"
-      ? { ...v, podCode, cyCutoffAt, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null }
+      ? { ...v, podCode, cyCutoffAt, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDimensions: null, deliveryWarehouse: null }
       : { ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null };
   });
 
@@ -205,6 +210,10 @@ export const SHIPMENT_FORM_KEYS = [
   "cargoDimensions",
   "deliveryWarehouse",
   "pickupRemarks",
+  "vesselName",
+  "voyageNo",
+  "freightTerms",
+  "incoterm",
 ] as const;
 
 export type FieldErrors = Partial<Record<string, string>>;

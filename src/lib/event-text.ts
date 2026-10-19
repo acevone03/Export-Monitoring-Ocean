@@ -12,7 +12,8 @@ const FIELD_LABEL: Record<string, string> = {
   arrastreCutoffAt: "Arrastre cut-off", podCode: "HBL destination code", declarationBy: "Declaration c/o",
   declarationForwarder: "Declaration via forwarder", partOfHblNo: "Part of HBL",
   positioningAt: "Positioning", containerYard: "Container yard", portOfLoading: "Port of loading", cyCutoffAt: "Cut-off",
-  consolidator: "Consol", grossWeightKg: "GW (kg)", cbm: "CBM", cargoDescription: "Description",
+  consolidator: "Consol", grossWeightKg: "GW (kg)", cbm: "CBM", cargoDescription: "Commodity",
+  vesselName: "Vessel", voyageNo: "Voyage", freightTerms: "Freight", incoterm: "Incoterms",
   cargoDimensions: "Cargo dimension", deliveryWarehouse: "Delivery warehouse", pickupRemarks: "Pick-up remarks",
 };
 

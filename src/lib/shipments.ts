@@ -101,6 +101,7 @@ const EDITABLE: Array<keyof ShipmentInput> = [
   // Pick-up instruction
   "positioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
   "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks",
+  "vesselName", "voyageNo", "freightTerms", "incoterm",
 ];
 
 const comparable = (v: unknown) =>

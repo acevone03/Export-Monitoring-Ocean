@@ -28,6 +28,7 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
     destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, pickupAddress: null,
     positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null, consolidator: null, grossWeightKg: null, cbm: null,
     cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null, pickupRemarks: null, pickupInstructionSentAt: null,
+    vesselName: null, voyageNo: null, freightTerms: null, incoterm: null,
     hblType: "NNR", etrackPaidAt: null, shippingLinePaidAt: null, invoicedAt: null, invoiceNo: null, carrierName: "Maersk", carrierBookingRef: "B1",
     carrierRemarks: null, arrastreResponsibility: "NNR", exportDeclarationStatus: "PENDING",
     requestedPickupAt: t(48), actualPickupAt: null, fsiCutoffAt: t(72), fsiSubmittedAt: null,

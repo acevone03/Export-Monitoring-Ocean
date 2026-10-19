@@ -148,6 +148,8 @@ export default async function ShipmentPage({
             <Row k="POD" v={s.pod} />
             <Row k="Cargo" v={cargo} />
             <Row k="Shipping line / co-loader" v={s.carrierName} />
+            <Row k="Vessel / voyage" v={[s.vesselName, s.voyageNo ? `V.${s.voyageNo}` : null].filter(Boolean).join(" ") || null} />
+            <Row k="Freight / Incoterms" v={[s.freightTerms === "PREPAID" ? "Prepaid" : s.freightTerms === "COLLECT" ? "Collect" : null, s.incoterm].filter(Boolean).join(" · ") || null} />
             <Row k="Booking no." v={s.carrierBookingRef} mono />
             <Row k="Remarks" v={s.carrierRemarks} />
             <Row k="Requested pick-up" v={formatDateTime(s.requestedPickupAt)} />

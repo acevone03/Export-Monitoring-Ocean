@@ -28,6 +28,7 @@ export default async function NewShipmentPage() {
           arrastreCutoffAt: "", podCode: "", hblType: "NNR", declarationBy: "NNR", declarationForwarder: "", partOfHblNo: "",
           positioningAt: "", containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
           cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
+          vesselName: "", voyageNo: "", freightTerms: "", incoterm: "",
         }}
       />
     </div>

@@ -501,3 +501,10 @@ PO/SO, IDS, container/seal numbers, VGM, COO, and the transaction and operations
 Cut-offs on the sheet (NNR, 19-Oct-2026): CARRIER CUT OFF, **FSI CUT OFF**, and one **ED & ARRASTRE CUT OFF** box. That box
 shows the arrastre cut-off (when NNR pays arrastre) and the ED cut-off (export declaration = the BOC portal upload deadline,
 FSI cut-off − 24h unless the rule is changed); one date when they are the same, both (ED … / ARR …) when they differ.
+
+## Commodity, freight terms, Incoterms, vessel (19-Oct-2026)
+
+New shipment fields: **Commodity description** (now for FCL and LCL; it was LCL-only), **Freight** (Prepaid / Collect),
+**Incoterms** (Incoterms 2020 list: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP), **Vessel name** and **Voyage no.**
+All optional. They print on the booking sheet (VESSEL NAME AND VOYAGE#, PREPAID/COLLECT tick, INCOTERMS, COMMODITY) and show on
+the shipment page; the commodity is also on the transport pick-up instruction.

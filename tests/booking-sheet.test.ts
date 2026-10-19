@@ -9,6 +9,7 @@ const base = {
   containerPlan: [{ size: "40HC", qty: 1 }], consigneeName: "Tokyo <Fresh>", etdMnl: fromManila(2026, 11, 15), atdMnl: null, eta: fromManila(2026, 11, 21),
   pickupAddress: null, cargoDescription: "Coconut", cargoDimensions: null, grossWeightKg: 24000, cbm: null, lclQty: null, lclUnit: null,
   deliveryWarehouse: null, pickupRemarks: null, carrierRemarks: null, invoiceNo: "SI-1", fsiCutoffAt: fromManila(2026, 11, 13, 17),
+  vesselName: "MAERSK KOWLOON", voyageNo: "245S", freightTerms: "COLLECT", incoterm: "FOB",
   arrastreResponsibility: "NNR", bocDeadlineAt: fromManila(2026, 11, 12, 17), arrastreDeadlineAt: fromManila(2026, 11, 13, 12), arrastreCutoffAt: null,
   shipper: { code: "SHP-0001", name: "Luzon Coco", contactPerson: null, phone: null, defaultPickupAddress: "Calamba" }, assignedCs: { name: "Kyla Marie Risma" },
 } as unknown as BookingSheetShipment;
@@ -20,6 +21,7 @@ describe("booking sheet", () => {
       pic: "KYLA MARIE RISMA", load: "FCL 1x40HC", hblNo: "MAEU240001  (DIRECT)", placeOfLoading: "MNL · SUBIC",
       pickupDate: "12/NOV/2026 08:00H", carrierCutoff: "13/NOV/2026", etd: "15/NOV/2026", transitTime: "6 DAYS",
       shipperLines: ["Calamba"], grossWeight: "24,000 KGS", nnrPickup: true, billingInvoiceNo: "SI-1",
+      vesselVoyage: "MAERSK KOWLOON V.245S", prepaid: false, collect: true, incoterm: "FOB", commodity: "Coconut",
       fsiCutoff: "13/NOV/2026 17:00H", edArrastreCutoff: "ED 12/NOV/2026 17:00H\nARR 13/NOV/2026 12:00H",
     });
   });

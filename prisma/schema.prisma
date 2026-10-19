@@ -231,6 +231,10 @@ model Shipment {
 
   carrierName    String?
   carrierRemarks String?
+  vesselName     String?
+  voyageNo       String?
+  freightTerms   String? // PREPAID | COLLECT
+  incoterm       String? // Incoterms 2020 code, see INCOTERMS in src/lib/containers.ts
 
   // Pick-up instruction sent to the transport (trucking) company. FCL and LCL use different fields;
   // the form clears the ones that do not apply to the cargo type.
@@ -243,7 +247,7 @@ model Shipment {
   consolidator      String?
   grossWeightKg     Float?
   cbm               Float?
-  cargoDescription  String?
+  cargoDescription  String?   // commodity description (FCL and LCL)
   cargoDimensions   String?
   deliveryWarehouse String?
   // Both

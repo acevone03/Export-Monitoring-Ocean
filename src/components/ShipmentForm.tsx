@@ -3,7 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import type { FieldErrors } from "@/lib/shipment-input";
 import { podCodeFor } from "@/lib/pod-codes";
-import { CONTAINER_SIZES, CONTAINER_LABEL, PORTS_OF_LOADING, type ContainerSize } from "@/lib/containers";
+import { CONTAINER_SIZES, CONTAINER_LABEL, FREIGHT_TERMS, INCOTERMS, PORTS_OF_LOADING, type ContainerSize } from "@/lib/containers";
 import { formatInstructionDate, formatInstructionDateTime, parseManilaInput } from "@/lib/time";
 
 // `values` echoes the submitted fields on error: React 19 resets the form after an
@@ -62,6 +62,11 @@ export type ShipmentFormValues = {
   deliveryWarehouse: string;
   // Both:
   pickupRemarks: string;
+  // Booking sheet
+  vesselName: string;
+  voyageNo: string;
+  freightTerms: "" | "PREPAID" | "COLLECT";
+  incoterm: string;
 };
 
 type Props = {
@@ -264,6 +269,25 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
           </p>
         </Field>
 
+        <Field label="Commodity description" error={err.cargoDescription} span={2}>
+          <input className="input" name="cargoDescription" defaultValue={v("cargoDescription")} maxLength={500} placeholder="e.g. Desiccated coconut, 1,200 bags" />
+        </Field>
+        <Field label="Freight" error={err.freightTerms}>
+          <div className="flex h-[38px] items-center gap-4 text-sm">
+            {FREIGHT_TERMS.map((t) => (
+              <label key={t} className="flex items-center gap-1.5">
+                <input type="radio" name="freightTerms" value={t} defaultChecked={v("freightTerms") === t} /> {t === "PREPAID" ? "Prepaid" : "Collect"}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Incoterms" error={err.incoterm}>
+          <select className="input" name="incoterm" defaultValue={v("incoterm")}>
+            <option value="">Choose…</option>
+            {INCOTERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Field>
+
         {cargoType === "FCL" ? (
           <>
             <Field label={`Positioning date and time${requireInstruction ? " *" : ""}`} error={err.positioningAt}>
@@ -338,9 +362,6 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             <Field label="CBM" error={err.cbm}>
               <input className="input" type="number" min={0} step="any" name="cbm" defaultValue={v("cbm")} />
             </Field>
-            <Field label="Description" error={err.cargoDescription} span={2}>
-              <input className="input" name="cargoDescription" defaultValue={v("cargoDescription")} placeholder="e.g. Dried mangoes in cartons" />
-            </Field>
             <Field label="Cargo dimension" error={err.cargoDimensions} span={2}>
               <input className="input" name="cargoDimensions" defaultValue={v("cargoDimensions")} placeholder="e.g. 4 pallets @ 120 x 100 x 150 cm" />
             </Field>
@@ -378,6 +399,12 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       <Section title="Carrier">
         <Field label="Shipping line / co-loader" error={err.carrierName}>
           <input className="input" name="carrierName" defaultValue={v("carrierName")} />
+        </Field>
+        <Field label="Vessel name" error={err.vesselName}>
+          <input className="input" name="vesselName" defaultValue={v("vesselName")} maxLength={100} placeholder="e.g. MAERSK KOWLOON" />
+        </Field>
+        <Field label="Voyage no." error={err.voyageNo}>
+          <input className="input" name="voyageNo" defaultValue={v("voyageNo")} maxLength={30} placeholder="e.g. 245S" />
         </Field>
         <Field label="Remarks" error={err.carrierRemarks} span={2}>
           <input className="input" name="carrierRemarks" defaultValue={v("carrierRemarks")} />

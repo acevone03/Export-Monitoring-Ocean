@@ -38,6 +38,10 @@ export type BookingSheetData = {
   routing: string;
   consolWarehouse: string;
   commodity: string;
+  vesselVoyage: string;
+  prepaid: boolean;
+  collect: boolean;
+  incoterm: string;
   invoiceNo: string;
   nnrPickup: boolean;
   shipperDelivery: boolean;
@@ -96,6 +100,10 @@ export function bookingSheetData(s: BookingSheetShipment, printedAt: Date): Book
     routing: `MANILA - ${s.pod}`.toUpperCase(),
     consolWarehouse: fcl ? "" : s.deliveryWarehouse ?? "",
     commodity: s.cargoDescription ?? "",
+    vesselVoyage: [s.vesselName, s.voyageNo ? `V.${s.voyageNo}` : null].filter(Boolean).join(" "),
+    prepaid: s.freightTerms === "PREPAID",
+    collect: s.freightTerms === "COLLECT",
+    incoterm: s.incoterm ?? "",
     invoiceNo: "",
     nnrPickup: !!s.requestedPickupAt,
     shipperDelivery: !s.requestedPickupAt,
@@ -216,7 +224,7 @@ export function bookingSheetHtml(d: BookingSheetData, backHref: string): string 
   <div class="row">
     <div class="c" style="width:48%;min-height:30px"><div class="l lb">SHIPPER</div>${v(d.shipper)}${d.shipperLines.map((x) => `<div class="sub">${esc(x)}</div>`).join("")}</div>
     ${cell('<span class="lb">CARRIER / CONSOLIDATOR</span>', d.carrier, "", "width:22%")}
-    ${cell('<span class="lb">VESSEL NAME AND VOYAGE#</span>', "", "", "width:30%")}
+    ${cell('<span class="lb">VESSEL NAME AND VOYAGE#</span>', d.vesselVoyage, "", "width:30%")}
   </div>
   <div class="row">
     ${cell('<span class="lb">CONSIGNEE</span>', d.consignee, "", "width:48%;min-height:30px")}
@@ -256,8 +264,8 @@ export function bookingSheetHtml(d: BookingSheetData, backHref: string): string 
     <div class="right">
       <div class="row" style="min-height:44px">
         <div class="c" style="width:22%;display:flex;flex-direction:column;justify-content:space-around;font-weight:700">
-          <div>${box(false)} PREPAID</div><div>${box(false)} COLLECT</div></div>
-        <div class="c lb" style="width:16%;text-align:center">INCOTERMS</div>
+          <div>${box(d.prepaid)} PREPAID</div><div>${box(d.collect)} COLLECT</div></div>
+        <div class="c lb" style="width:16%;text-align:center">INCOTERMS${d.incoterm ? `<div class="v" style="font-size:11pt;padding-top:6px">${esc(d.incoterm)}</div>` : ""}</div>
         <div class="c lb" style="width:31%;text-align:center">ACCESORIAL TARIFF</div>
         <div class="c lb" style="width:31%;text-align:center">FREIGHT TARIFF</div>
       </div>
