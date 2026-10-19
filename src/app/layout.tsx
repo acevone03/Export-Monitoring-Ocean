@@ -6,6 +6,8 @@ import { getCurrentUser, can } from "@/lib/auth";
 import { devToolsEnabled, getClockOffsetMs, now } from "@/lib/clock";
 import { formatDateTime } from "@/lib/time";
 import { verseOfTheDay } from "@/lib/scripture";
+import { DEPARTED_UNBILLED_WHERE } from "@/lib/unbilled";
+import { shipmentScope } from "@/lib/access";
 import { logoutAction } from "./login/actions";
 
 export const metadata: Metadata = { title: "NNR Export Monitor" };
@@ -13,9 +15,10 @@ export const metadata: Metadata = { title: "NNR Export Monitor" };
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   const staff = user && (user.role === "CS" || user.role === "SUPERVISOR");
-  const [unread, offset] = await Promise.all([
+  const [unread, offset, unbilled] = await Promise.all([
     staff ? prisma.notification.count({ where: { userId: user.id, readAt: null } }) : Promise.resolve(0),
     user ? getClockOffsetMs() : Promise.resolve(0),
+    staff ? prisma.shipment.count({ where: { AND: [DEPARTED_UNBILLED_WHERE, shipmentScope(user)] } }) : Promise.resolve(0),
   ]);
   const simulated = offset !== 0 ? await now() : null;
   const verse = user ? verseOfTheDay(simulated ?? new Date()) : null;
@@ -41,6 +44,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/intake" className="text-slate-700 hover:text-blue-700">From email</Link>
                   <Link href="/shippers" className="text-slate-700 hover:text-blue-700">Shippers</Link>
                   <Link href="/transport" className="text-slate-700 hover:text-blue-700">Transport</Link>
+                  <Link href="/unbilled" className="text-slate-700 hover:text-blue-700" title="Departed shipments not yet billed">
+                    Unbilled{unbilled > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900">{unbilled}</span>}
+                  </Link>
                 </>
               )}
               {can.viewDailyReport(user) && <Link href="/reports/daily" className="text-slate-700 hover:text-blue-700">Daily report</Link>}

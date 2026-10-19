@@ -100,6 +100,7 @@ export function extractionToForm(
       assignedCsId,
       arrastreCutoffAt: "",
       podCode: podCodeFor(destination) ?? "",
+      hblType: "NNR",
       declarationBy: "NNR",
       declarationForwarder: "",
       partOfHblNo: "",

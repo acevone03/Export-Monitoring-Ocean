@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseManilaInput } from "./time";
+import { parseManilaInput, startOfManilaDay } from "./time";
 import { podCodeFor, POD_CODE_RE } from "./pod-codes";
 import { CONTAINER_SIZES, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
 
@@ -12,6 +12,9 @@ const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).transform((v) => v || null);
 
 /** <input type="datetime-local"> value, interpreted as Asia/Manila. Empty -> null. */
+/** A booking number used as a Direct BL's HBL No. (same rule as a manual HBL correction). */
+export const DIRECT_HBL_RE = /^[A-Z0-9-]{4,30}$/;
+
 export const manilaDateTime = z.string().trim().transform((v, ctx) => {
   if (!v) return null;
   const d = parseManilaInput(v);
@@ -20,6 +23,20 @@ export const manilaDateTime = z.string().trim().transform((v, ctx) => {
     return z.NEVER;
   }
   return d;
+});
+
+/**
+ * Date-only field (ETD, ETA): <input type="date"> "YYYY-MM-DD", stored as 00:00 Manila.
+ * A date-time value (spreadsheet import, older forms) keeps just its Manila date. Empty -> null.
+ */
+export const manilaDate = z.string().trim().transform((v, ctx) => {
+  if (!v) return null;
+  const d = parseManilaInput(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00` : v);
+  if (!d) {
+    ctx.addIssue({ code: "custom", message: "Invalid date" });
+    return z.NEVER;
+  }
+  return startOfManilaDay(d);
 });
 
 // Pick-up instruction fields are optional keys so older callers (the spreadsheet import) still validate.
@@ -81,8 +98,8 @@ export const ShipmentInputSchema = z
     fsiCutoffAt: manilaDateTime,
     preadviseCutoffAt: manilaDateTime,
     arrastreCutoffAt: manilaDateTime,
-    etdMnl: manilaDateTime,
-    eta: manilaDateTime,
+    etdMnl: manilaDate,
+    eta: manilaDate,
     arrastreResponsibility: z.enum(["NNR", "SHIPPER"]),
     carrierName: optText(100),
     carrierBookingRef: optText(50),
@@ -90,6 +107,8 @@ export const ShipmentInputSchema = z
     assignedCsId: z.string().uuid("Choose the assigned CS"),
     // HBL destination code (TYO in NNRMNLTYOF9904). Blank: worked out from the destination.
     podCode: z.string().trim().toUpperCase().max(3),
+    // NNR consolidation (NNR's own HBL number) or DIRECT (the booking number is the HBL). Optional key: older callers mean NNR.
+    hblType: z.string().optional().transform((v) => v || "NNR").pipe(z.enum(["NNR", "DIRECT"], "Choose NNR Consolidation or Direct")),
     declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
     declarationForwarder: optText(100),
     partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
@@ -121,19 +140,29 @@ export const ShipmentInputSchema = z
     if (v.cargoType === "LCL" && (!v.lclQty || !v.lclUnit)) {
       ctx.addIssue({ code: "custom", path: ["lclQty"], message: "Enter LCL quantity and unit" });
     }
-    if (v.etdMnl && v.eta && v.eta <= v.etdMnl) {
-      ctx.addIssue({ code: "custom", path: ["eta"], message: "ETA must be after ETD" });
+    if (v.etdMnl && v.eta && v.eta < v.etdMnl) {
+      ctx.addIssue({ code: "custom", path: ["eta"], message: "ETA cannot be before ETD" });
     }
     const code = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort);
-    if (!code || !POD_CODE_RE.test(code)) {
+    if (v.hblType === "DIRECT") {
+      // The booking number becomes the HBL No., so it must be there and usable as one.
+      if (!v.carrierBookingRef) {
+        ctx.addIssue({ code: "custom", path: ["carrierBookingRef"], message: "Booking number is required for a Direct BL (it becomes the HBL)" });
+      } else if (!DIRECT_HBL_RE.test(v.carrierBookingRef.toUpperCase())) {
+        ctx.addIssue({ code: "custom", path: ["carrierBookingRef"], message: "For a Direct BL the booking number may only have letters, digits and dashes (4–30)" });
+      }
+    } else if (!code || !POD_CODE_RE.test(code)) {
       ctx.addIssue({ code: "custom", path: ["podCode"], message: "Enter the 3-letter HBL destination code (e.g. TYO)" });
     }
   })
   // Drop the fields that do not apply to the chosen cargo type.
   .transform((v) => {
-    const podCode = (v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort))!;
+    // Only NNR HBLs use the destination code; a Direct BL keeps it if known, for reference.
+    const podCode: string | null = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort) || null;
+    // FCL cut-off is the positioning date (NNR, 19-Oct-2026), so it is never entered separately.
+    const cyCutoffAt = v.positioningAt ? startOfManilaDay(v.positioningAt) : null;
     return v.cargoType === "FCL"
-      ? { ...v, podCode, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null }
+      ? { ...v, podCode, cyCutoffAt, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null }
       : { ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null };
   });
 
@@ -161,6 +190,7 @@ export const SHIPMENT_FORM_KEYS = [
   "assignedCsId",
   "arrastreCutoffAt",
   "podCode",
+  "hblType",
   "declarationBy",
   "declarationForwarder",
   "partOfHblNo",

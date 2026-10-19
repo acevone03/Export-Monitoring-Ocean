@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import type { CellValue, ExportShipment } from "../columns";
 import { EXTRA_COLUMNS, SHEET_COLUMNS, SHEET_VALUE } from "../nnr-sheet";
-import { formatDateTime } from "../time";
+import { formatDateTime, isManilaMidnight } from "../time";
 import type { DailyReport } from "./daily";
 import type { MonthlyReport } from "./monthly";
 
@@ -10,6 +10,8 @@ import type { MonthlyReport } from "./monthly";
 
 const MANILA_MS = 8 * 3_600_000;
 const DATE_FMT = "dd-mmm-yyyy hh:mm";
+const DAY_FMT = "dd-mmm-yyyy"; // date-only values (ETD, ETA, cut-off) are stored at 00:00 Manila
+const fmtFor = (d: Date) => (isManilaMidnight(d) ? DAY_FMT : DATE_FMT);
 const RED = "FFFDE2E2";
 const HEADER = "FFE2E8F0";
 
@@ -36,7 +38,7 @@ function table(
     r.forEach((v, ci) => {
       const cell = row.getCell(ci + 1);
       cell.value = toCell(v) as ExcelJS.CellValue;
-      if (v instanceof Date) cell.numFmt = DATE_FMT;
+      if (v instanceof Date) cell.numFmt = fmtFor(v);
       if (opts.fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
     });
   });
@@ -80,7 +82,7 @@ export function rawSheet(wb: ExcelJS.Workbook, shipments: ExportShipment[]) {
     const put = (col: number, v: CellValue) => {
       const cell = row.getCell(col);
       cell.value = toCell(v) as ExcelJS.CellValue;
-      if (v instanceof Date) cell.numFmt = DATE_FMT;
+      if (v instanceof Date) cell.numFmt = fmtFor(v);
     };
     SHEET_COLUMNS.forEach((c, i) => put(i + 1, SHEET_VALUE[c.key](s)));
     EXTRA_COLUMNS.forEach((c, i) => put(n + 2 + i, c.value(s)));

@@ -4,7 +4,7 @@ import { deriveStatus } from "./status";
 import { DEFAULT_RULES, computeCachedDeadlines, type RuleLike } from "./deadlines";
 import { EVENT } from "./milestones";
 import type { ShipmentInput } from "./shipment-input";
-import { formatDateTime } from "./time";
+import { DAY, formatDateTime } from "./time";
 import { reopenAlerts, resolveStaleAlerts } from "./alerts";
 
 // The only module that writes shipments. Every write:
@@ -57,7 +57,8 @@ export async function createShipment(
   return db.$transaction(async (tx) => {
     // Numbers first: the counter UPDATE takes the write lock up front (see numbering.ts).
     const jobNo = await nextJobNo(tx, opts.now);
-    const hblNo = await nextHblNo(tx, input.podCode, input.cargoType);
+    // Direct BL: the booking number is the HBL No. NNR consolidation: next NNR number.
+    const hblNo = input.hblType === "DIRECT" ? await directHblNo(tx, input.carrierBookingRef, null) : await nextHblNo(tx, input.podCode!, input.cargoType);
     await assertAssignable(tx, input.shipperId, input.assignedCsId);
     const rules = await loadRules(tx);
 
@@ -79,6 +80,15 @@ export async function createShipment(
   });
 }
 
+/** The HBL No. of a Direct BL: its booking number, which no other shipment may already use as HBL. */
+async function directHblNo(tx: Tx, bookingRef: string | null, selfId: string | null): Promise<string> {
+  const hbl = (bookingRef ?? "").trim().toUpperCase();
+  if (!hbl) throw new DomainError("Booking number is required for a Direct BL (it becomes the HBL).");
+  const other = await tx.shipment.findUnique({ where: { hblNo: hbl }, select: { id: true, jobNo: true } });
+  if (other && other.id !== selfId) throw new DomainError(`Booking number ${hbl} is already the HBL of shipment ${other.jobNo}.`);
+  return hbl;
+}
+
 // ---------------------------------------------------------------- edit
 
 // Planning fields editable from the form. Milestone timestamps are NOT here:
@@ -87,7 +97,7 @@ const EDITABLE: Array<keyof ShipmentInput> = [
   "shipperId", "consigneeName", "pickupAddress", "destinationPort", "pod", "cargoType", "containerPlan", "lclQty", "lclUnit",
   "requestedPickupAt", "fsiCutoffAt", "preadviseCutoffAt", "etdMnl", "eta", "arrastreResponsibility",
   "carrierName", "carrierBookingRef", "carrierRemarks", "assignedCsId",
-  "arrastreCutoffAt", "podCode", "declarationBy", "declarationForwarder", "partOfHblNo",
+  "arrastreCutoffAt", "podCode", "declarationBy", "declarationForwarder", "partOfHblNo", "hblType",
   // Pick-up instruction
   "positioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
   "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks",
@@ -136,13 +146,29 @@ export async function updateShipment(
       changes.assignedCsId = { from: name(before.assignedCsId), to: name(input.assignedCsId) };
     }
 
+    // HBL follows the HBL type: a Direct BL always carries the booking number; switching back to
+    // NNR consolidation issues a new NNR number (the old one is never reused).
+    let hblChange: { from: string | null; to: string } | null = null;
+    if (input.hblType === "DIRECT") {
+      const to = await directHblNo(tx, input.carrierBookingRef, id);
+      if (to !== before.hblNo) hblChange = { from: before.hblNo, to };
+    } else if (before.hblType === "DIRECT" || !before.hblNo) {
+      hblChange = { from: before.hblNo, to: await nextHblNo(tx, input.podCode!, input.cargoType) };
+    }
+
     const rules = await loadRules(tx);
-    const merged = await tx.shipment.update({ where: { id }, data });
+    const merged = await tx.shipment.update({ where: { id }, data: hblChange ? { ...data, hblNo: hblChange.to } : data });
     const after = await tx.shipment.update({ where: { id }, data: derive(merged, rules, opts.now) });
 
     const events: Prisma.MilestoneEventCreateManyInput[] = [
       { shipmentId: id, type: EVENT.FIELD_CHANGED, value: JSON.stringify(changes), actorId: actor.id, source: "WEB", occurredAt: opts.now },
     ];
+    if (hblChange) {
+      events.push({
+        shipmentId: id, type: EVENT.HBL_EDITED, value: JSON.stringify(hblChange),
+        note: input.hblType === "DIRECT" ? "Direct BL: HBL = booking number" : "Changed to NNR consolidation", actorId: actor.id, source: "WEB", occurredAt: opts.now,
+      });
+    }
     if (!before.requestedPickupAt && after.requestedPickupAt) {
       events.push({ shipmentId: id, type: EVENT.PICKUP_SCHEDULED, value: after.requestedPickupAt.toISOString(), actorId: actor.id, source: "WEB", occurredAt: opts.now });
     }
@@ -166,6 +192,9 @@ export type MilestoneInput =
   | { kind: "DOCS_TO_OVERSEAS"; at: Date }
   | { kind: "DEPARTED"; at: Date; eta: Date | null }
   | { kind: "ARRIVED"; at: Date }
+  | { kind: "ETRACK_PAID"; at: Date }
+  | { kind: "INVOICED"; at: Date; invoiceNo: string | null }
+  | { kind: "SHIPPING_LINE_PAID"; at: Date }
   | { kind: "CLOSED" }
   | { kind: "CANCELLED"; reason: string };
 
@@ -233,7 +262,8 @@ async function planMilestone(
     case "DEPARTED": {
       alreadyDone("Departure (ATD)", s.atdMnl);
       const eta = m.eta ?? s.eta;
-      if (eta && eta <= m.at) throw new DomainError("ETA must be after ATD.");
+      // ETA is a date (00:00 Manila): it may not be a day before the ATD.
+      if (eta && eta.getTime() + DAY <= m.at.getTime()) throw new DomainError("ETA cannot be before ATD.");
       return { patch: { atdMnl: m.at, eta }, type: EVENT.DEPARTED, value: JSON.stringify({ atd: m.at.toISOString(), eta: eta?.toISOString() ?? null }) };
     }
     case "ARRIVED":
@@ -241,6 +271,19 @@ async function planMilestone(
       alreadyDone("Arrival (ATA)", s.ata);
       if (m.at <= s.atdMnl) throw new DomainError("ATA must be after ATD.");
       return { patch: { ata: m.at }, type: EVENT.ARRIVED, value: m.at.toISOString() };
+    case "ETRACK_PAID":
+      alreadyDone("E-track payment", s.etrackPaidAt);
+      return { patch: { etrackPaidAt: m.at }, type: EVENT.ETRACK_PAID, value: m.at.toISOString() };
+    case "INVOICED":
+      alreadyDone("Billing invoice", s.invoicedAt);
+      return {
+        patch: { invoicedAt: m.at, invoiceNo: m.invoiceNo },
+        type: EVENT.INVOICED,
+        value: JSON.stringify({ at: m.at.toISOString(), invoiceNo: m.invoiceNo }),
+      };
+    case "SHIPPING_LINE_PAID":
+      alreadyDone("Shipping line payment", s.shippingLinePaidAt);
+      return { patch: { shippingLinePaidAt: m.at }, type: EVENT.SHIPPING_LINE_PAID, value: m.at.toISOString() };
     case "CLOSED":
       if (s.status !== "ARRIVED") throw new DomainError("Only arrived shipments can be closed.");
       return { patch: { closedAt: now }, type: EVENT.CLOSED, value: null };
@@ -249,6 +292,9 @@ async function planMilestone(
       return { patch: { cancelledAt: now, cancelReason: m.reason }, type: EVENT.CANCELLED, value: m.reason };
   }
 }
+
+/** Steps that may be recorded (and reverted) on a closed shipment. */
+export const FINANCE_STEPS = new Set<string>(["ETRACK_PAID", "INVOICED", "SHIPPING_LINE_PAID"]);
 
 export async function recordMilestone(
   db: PrismaClient,
@@ -259,7 +305,12 @@ export async function recordMilestone(
 ): Promise<Shipment> {
   return db.$transaction(async (tx) => {
     const s = await tx.shipment.findUniqueOrThrow({ where: { id } });
-    assertOpen(s);
+    // Payments and billing often come after the shipment is closed; only cancellation stops them.
+    if (FINANCE_STEPS.has(m.kind)) {
+      if (s.status === "CANCELLED") throw new DomainError("This shipment is cancelled and can no longer be changed.");
+    } else {
+      assertOpen(s);
+    }
     const { patch, type, value } = await planMilestone(tx, s, m, opts.now);
     const rules = await loadRules(tx);
     const merged = await tx.shipment.update({ where: { id }, data: patch });
@@ -288,6 +339,9 @@ export const REVERTIBLE = {
   DOCS_TO_OVERSEAS: { label: "Docs sent to overseas office", field: "exportDocsToOverseasAt", clear: { exportDocsToOverseasAt: null } },
   DEPARTED: { label: "Departure (ATD)", field: "atdMnl", clear: { atdMnl: null } },
   ARRIVED: { label: "Arrival (ATA)", field: "ata", clear: { ata: null } },
+  ETRACK_PAID: { label: "E-track payment", field: "etrackPaidAt", clear: { etrackPaidAt: null } },
+  INVOICED: { label: "Billing invoice", field: "invoicedAt", clear: { invoicedAt: null, invoiceNo: null } },
+  SHIPPING_LINE_PAID: { label: "Shipping line payment", field: "shippingLinePaidAt", clear: { shippingLinePaidAt: null } },
   CLOSED: { label: "Close", field: "closedAt", clear: { closedAt: null } },
   CANCELLED: { label: "Cancellation", field: "cancelledAt", clear: { cancelledAt: null, cancelReason: null } },
 } as const satisfies Record<string, { label: string; field: keyof Shipment; clear: Prisma.ShipmentUncheckedUpdateInput }>;
@@ -307,12 +361,13 @@ export async function revertMilestone(db: PrismaClient, id: string, kind: Revert
     const previous = s[def.field] as Date | null;
     if (!previous) throw new DomainError(`${def.label} is not recorded; nothing to revert.`);
     if (s.status === "CANCELLED" && kind !== "CANCELLED") throw new DomainError("Revert the cancellation first.");
-    if (s.status === "CLOSED" && kind !== "CLOSED") throw new DomainError("Re-open the shipment (revert Close) first.");
+    if (s.status === "CLOSED" && kind !== "CLOSED" && !FINANCE_STEPS.has(kind)) throw new DomainError("Re-open the shipment (revert Close) first.");
     if (kind === "DEPARTED" && s.ata) throw new DomainError("Revert the arrival (ATA) first.");
 
     const value: Record<string, unknown> = { kind, previous: previous.toISOString() };
     if (kind === "CANCELLED") value.cancelReason = s.cancelReason;
     if (kind === "DOCS_SENT") Object.assign(value, { to: s.exportDocsRecipient, subject: s.exportDocsSubject });
+    if (kind === "INVOICED") Object.assign(value, { invoiceNo: s.invoiceNo });
 
     const rules = await loadRules(tx);
     const merged = await tx.shipment.update({ where: { id }, data: def.clear });

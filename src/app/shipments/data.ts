@@ -2,7 +2,7 @@ import "server-only";
 import type { Shipment } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { COMMON_PORTS } from "@/lib/ports";
-import { toManilaInput } from "@/lib/time";
+import { toManilaDateInput, toManilaInput } from "@/lib/time";
 import type { ShipmentFormValues } from "@/components/ShipmentForm";
 
 export async function formOptions() {
@@ -29,8 +29,8 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     requestedPickupAt: toManilaInput(s.requestedPickupAt),
     fsiCutoffAt: toManilaInput(s.fsiCutoffAt),
     preadviseCutoffAt: toManilaInput(s.preadviseCutoffAt),
-    etdMnl: toManilaInput(s.etdMnl),
-    eta: toManilaInput(s.eta),
+    etdMnl: toManilaDateInput(s.etdMnl),
+    eta: toManilaDateInput(s.eta),
     arrastreResponsibility: s.arrastreResponsibility,
     carrierName: s.carrierName ?? "",
     carrierBookingRef: s.carrierBookingRef ?? "",
@@ -38,6 +38,7 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     assignedCsId: s.assignedCsId,
     arrastreCutoffAt: toManilaInput(s.arrastreCutoffAt),
     podCode: s.podCode ?? "",
+    hblType: s.hblType,
     declarationBy: s.declarationBy,
     declarationForwarder: s.declarationForwarder ?? "",
     partOfHblNo: s.partOfHblNo ?? "",

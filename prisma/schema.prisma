@@ -20,6 +20,13 @@ enum Role {
   CUSTOMER // reserved for the post-MVP customer portal; no UI grants it yet
 }
 
+// NNR: NNR's own house bill (NNRMNL…F/L number). DIRECT: carrier bill straight to the shipper; the
+// booking number is used as the HBL.
+enum HblType {
+  NNR
+  DIRECT
+}
+
 enum CargoType {
   FCL
   LCL
@@ -171,6 +178,7 @@ model Shipment {
   // Ocean export only (see DECISIONS.md). No mode field; numbering formats carry the "O".
   jobNo String  @unique
   hblNo String? @unique // assigned on confirmation, never reused
+  hblType HblType @default(NNR) // DIRECT: hblNo = carrierBookingRef
   // Destination code used in the HBL No. (e.g. TYO in NNRMNLTYOF9904).
   podCode String?
   // "PART OF 8665" in the sheet: the HBL No. this split shipment belongs with.
@@ -242,6 +250,12 @@ model Shipment {
   pickupRemarks     String?
   pickupInstructionSentAt DateTime? // last time it was emailed to transport
 
+  // Payments and billing (milestones; can be recorded after the shipment is closed).
+  etrackPaidAt       DateTime? // E-track payment
+  shippingLinePaidAt DateTime? // shipping line payment
+  invoicedAt         DateTime? // billing invoice sent to the customer; null = unbilled
+  invoiceNo          String?
+
   etdMnl DateTime? // null allowed at DB level so intake can save; flagged as missing data
   atdMnl DateTime?
   eta    DateTime?
@@ -276,6 +290,7 @@ model Shipment {
   @@index([assignedCsId])
   @@index([shipperId])
   @@index([etdMnl])
+  @@index([invoicedAt])
 }
 
 // Atomic counters for Job No. and HBL No. Key examples: "JOB:2610", "HBL:26".

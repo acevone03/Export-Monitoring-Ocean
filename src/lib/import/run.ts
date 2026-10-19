@@ -287,7 +287,7 @@ export async function runImport(db: PrismaClient, buffer: Buffer, opts: ImportOp
       row: p.row, jobNo: p.jobNo, hblNo: p.hblNo, directBl: p.directBl, partOf: p.partOf, shipperName, shipperId: shipper?.id ?? null, createdAt,
       fingerprint: [shipperKey(shipperName), destination.toUpperCase(), d.requestedPickup?.toISOString() ?? "", JSON.stringify(p.cargo)].join("|"),
       data: {
-        consigneeName: f.consigneeName, pickupAddress: shipper?.defaultPickupAddress ?? null, destinationPort: f.destinationPort, pod: f.pod, podCode: p.directBl ? null : f.podCode, cargoType: f.cargoType,
+        consigneeName: f.consigneeName, pickupAddress: shipper?.defaultPickupAddress ?? null, destinationPort: f.destinationPort, pod: f.pod, podCode: p.directBl ? null : f.podCode, hblType: p.directBl ? "DIRECT" : "NNR", cargoType: f.cargoType,
         containerPlan: f.containerPlan.length ? f.containerPlan : Prisma.DbNull, lclQty: f.lclQty, lclUnit: f.lclUnit,
         requestedPickupAt: f.requestedPickupAt, actualPickupAt: d.actualPickup ?? null,
         fsiCutoffAt: f.fsiCutoffAt, fsiSubmittedAt: d.fsiSubmitted ?? null,

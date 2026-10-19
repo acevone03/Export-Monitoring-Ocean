@@ -456,3 +456,19 @@ real data are **not** in the repository; tests use invented rows under the real 
    top of the body, and the subject starts with `REVISED ATW for …` (NNR, 19-Oct-2026). Edits after pick-up do not resend.
 7. **Required for FCL** (NNR, 19-Oct-2026): positioning date/time and port of loading, on new shipments, email-intake
    confirmation, and edits before pick-up. Not required on the spreadsheet import or after pick-up.
+
+## HBL type, dates, payments and billing (19-Oct-2026)
+
+1. **HBL type** on every shipment: **NNR Consolidation** (NNR's own number, NNRMNL…F/L) or **Direct**. For Direct the
+   booking number *is* the HBL No.: it is required, may only contain letters, digits and dashes, and must not already be
+   another shipment's HBL. Changing the booking number of a Direct shipment changes its HBL (logged as an HBL change).
+   Switching Direct → NNR issues a new NNR number; NNR numbers are never reused. Spreadsheet rows marked DIRECT BL are Direct.
+2. **Cut-off = positioning date** (FCL). It is no longer typed in; it follows the positioning date automatically.
+3. **ETD and ETA are dates only**, stored as 00:00 Manila. A date-only due counts as on time until the end of that day.
+   ETA may be on the ETD date, not before it. Excel shows these as dd-mmm-yyyy.
+4. **New milestones**: 11. E-track paid, 12. Shipping line paid, 13. Billing invoice to customer (with optional invoice no.).
+   They can be recorded after the shipment is closed (billing often comes later), not on cancelled shipments, and a
+   supervisor can revert them.
+5. **Unbilled** tab: every non-cancelled shipment without step 13, split into "Departed, not billed" (with days since ATD;
+   amber from 3 days, red from 7) and "Not yet departed". The menu badge counts departed-not-billed. CS see their own
+   shipments; supervisors see all. Old spreadsheet history is left out.

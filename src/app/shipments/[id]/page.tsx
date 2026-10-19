@@ -4,7 +4,7 @@ import type { Shipment } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser, can, assertShipmentAccess } from "@/lib/auth";
 import { now as clockNow } from "@/lib/clock";
-import { formatDateTime } from "@/lib/time";
+import { endOfManilaDay, formatDate, formatDateTime } from "@/lib/time";
 import { containerPlanText } from "@/lib/containers";
 import { STATUS_LABEL } from "@/lib/status";
 import { dueState, type DueState } from "@/lib/due";
@@ -60,6 +60,7 @@ export default async function ShipmentPage({
   const parent = s.partOfHblNo ? await prisma.shipment.findUnique({ where: { hblNo: s.partOfHblNo }, select: { id: true } }) : null;
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
+  const billable = s.status !== "CANCELLED"; // payments and billing can be recorded after closing
   const missing = missingMandatory(s);
   const transportEmails = await getTransportEmails(prisma);
   const lastInstruction = s.events.find((e) => e.type === "PICKUP_INSTRUCTION_SENT" || e.type === "PICKUP_INSTRUCTION_FAILED");
@@ -97,7 +98,9 @@ export default async function ShipmentPage({
 
       <header className="flex flex-wrap items-start gap-x-6 gap-y-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">HBL No.</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            HBL No. · {s.hblType === "DIRECT" ? "Direct (booking no.)" : "NNR Consolidation"}
+          </p>
           <h1 className="font-mono text-2xl font-semibold">{s.hblNo ?? (/DIRECT BL/i.test(s.carrierRemarks ?? "") ? "DIRECT BL" : "(no HBL)")}</h1>
         </div>
         <div>
@@ -149,8 +152,8 @@ export default async function ShipmentPage({
             <Row k="FSI cut-off" v={formatDateTime(s.fsiCutoffAt)} />
             <Row k="Pre-advise cut-off" v={formatDateTime(s.preadviseCutoffAt)} />
             <Row k="Arrastre cut-off" v={s.arrastreResponsibility === "NNR" ? formatDateTime(s.arrastreCutoffAt) : "n/a (shipper)"} />
-            <Row k="ETD MNL" v={formatDateTime(s.etdMnl)} />
-            <Row k="ETA" v={formatDateTime(s.eta)} />
+            <Row k="ETD MNL" v={formatDate(s.etdMnl)} />
+            <Row k="ETA" v={formatDate(s.eta)} />
             <Row k="Arrastre by" v={s.arrastreResponsibility === "NNR" ? "NNR" : "Shipper"} />
             <Row k="Declaration c/o" v={`${s.declarationBy === "NNR" ? "NNR" : "Shipper"}${s.declarationForwarder ? ` (${s.declarationForwarder})` : ""}`} />
             <Row k="HBL destination code" v={s.podCode} mono />
@@ -241,18 +244,38 @@ export default async function ShipmentPage({
           <Step label="8. Docs sent to overseas office" due={null} done={s.exportDocsToOverseasAt} now={now} keepOpen revert={rv("DOCS_TO_OVERSEAS")}>
             {open && <TimedAction s={s} kind="DOCS_TO_OVERSEAS" button="Mark sent" />}
           </Step>
-          <Step label="9. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD" revert={rv("DEPARTED")}>
+          <Step label="9. Departed (ATD MNL)" due={endOfManilaDay(s.etdMnl)} done={s.atdMnl} now={now} dueLabel="ETD" dateOnly revert={rv("DEPARTED")}>
             {open && !s.atdMnl && (
               <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
                 <Hidden s={s} kind="DEPARTED" />
                 <WhenInput label="ATD" />
-                <label className="text-xs text-slate-600">ETA <input type="datetime-local" name="eta" className="input inline-block w-auto py-1" /></label>
+                <label className="text-xs text-slate-600">ETA <input type="date" name="eta" className="input inline-block w-auto py-1" /></label>
                 <button className="btn-secondary py-1">Mark departed</button>
               </ActionForm>
             )}
           </Step>
-          <Step label="10. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl} revert={rv("ARRIVED")}>
+          <Step label="10. Arrived (ATA)" due={endOfManilaDay(s.eta)} done={s.ata} now={now} dueLabel="ETA" dateOnly passive={!s.atdMnl} revert={rv("ARRIVED")}>
             {open && s.atdMnl && <TimedAction s={s} kind="ARRIVED" button="Mark arrived" whenLabel="ATA" />}
+          </Step>
+
+          <h3 className="pt-2 text-sm font-semibold text-slate-700">Payments and billing</h3>
+          <Step label="11. E-track paid" due={null} done={s.etrackPaidAt} now={now} revert={rv("ETRACK_PAID")}>
+            {billable && <TimedAction s={s} kind="ETRACK_PAID" button="Mark E-track paid" />}
+          </Step>
+          <Step label="12. Shipping line paid" due={null} done={s.shippingLinePaidAt} now={now} revert={rv("SHIPPING_LINE_PAID")}>
+            {billable && <TimedAction s={s} kind="SHIPPING_LINE_PAID" button="Mark shipping line paid" />}
+          </Step>
+          <Step label="13. Billing invoice to customer" due={null} done={s.invoicedAt} now={now} keepOpen revert={rv("INVOICED")}>
+            {s.invoicedAt ? (
+              s.invoiceNo && <p className="text-xs text-slate-600">Invoice no. {s.invoiceNo}</p>
+            ) : billable && (
+              <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
+                <Hidden s={s} kind="INVOICED" />
+                <input name="invoiceNo" placeholder="Invoice no. (optional)" maxLength={50} className="input w-44 py-1" />
+                <WhenInput />
+                <button className="btn-secondary py-1">Mark billed</button>
+              </ActionForm>
+            )}
           </Step>
 
           {open && (
@@ -393,7 +416,7 @@ function Row({ k, v, mono }: { k: string; v: string | null | undefined; mono?: b
 }
 
 function Step({
-  label, due, done, now, rule, dueLabel = "Due", passive, keepOpen, revert, children,
+  label, due, done, now, rule, dueLabel = "Due", dateOnly, passive, keepOpen, revert, children,
 }: {
   label: string;
   due: Date | null;
@@ -401,6 +424,8 @@ function Step({
   now: Date;
   rule?: string;
   dueLabel?: string;
+  /** Due is a whole day (ETD, ETA): show the date only. */
+  dateOnly?: boolean;
   passive?: boolean;
   keepOpen?: boolean;
   revert?: React.ReactNode;
@@ -413,7 +438,7 @@ function Step({
         <span className="font-medium">{label}</span>
         <span className="text-xs">{DUE_TEXT[state]}</span>
         <span className="ml-auto text-xs text-slate-600">
-          {due && <>{dueLabel} {formatDateTime(due)}{rule && <span className="text-slate-400"> ({rule})</span>}</>}
+          {due && <>{dueLabel} {dateOnly ? formatDate(due) : formatDateTime(due)}{rule && <span className="text-slate-400"> ({rule})</span>}</>}
           {done instanceof Date && <> · Done {formatDateTime(done)}</>}
         </span>
       </div>

@@ -44,6 +44,7 @@ export type ShipmentFormValues = {
   assignedCsId: string;
   arrastreCutoffAt: string;
   podCode: string;
+  hblType: "NNR" | "DIRECT";
   declarationBy: "NNR" | "SHIPPER";
   declarationForwarder: string;
   partOfHblNo: string;
@@ -114,8 +115,9 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
     return q;
   });
   const containers: Container[] = CONTAINER_SIZES.filter((z) => qtyBySize[z] > 0).map((z) => ({ size: z, qty: qtyBySize[z] }));
+  const [hblType, setHblType] = useState<"NNR" | "DIRECT">((v("hblType") as "NNR" | "DIRECT") || "NNR");
+  const [booking, setBooking] = useState(v("carrierBookingRef"));
   const [positioningPreview, setPositioningPreview] = useState(v("positioningAt"));
-  const [cutoffPreview, setCutoffPreview] = useState(v("cyCutoffAt"));
 
   function pickShipper(typed: string) {
     const t = typed.trim().toLowerCase();
@@ -202,20 +204,22 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Port of discharge" error={err.pod} flag={flags.pod} span={2}>
           <input className="input" name="pod" list="dest-list" defaultValue={v("pod")} placeholder="e.g. USLGB Long Beach" required autoComplete="off" onChange={(e) => suggestCode(e.currentTarget.form)} />
         </Field>
-        <Field label="HBL destination code" error={err.podCode} flag={flags.podCode}>
-          <input
-            className="input font-mono uppercase"
-            name="podCode"
-            value={podCode}
-            maxLength={3}
-            placeholder="e.g. TYO"
-            onChange={(e) => {
-              setPodCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""));
-              setPodTouched(true);
-            }}
-          />
-          <p className="mt-1 text-xs text-slate-500">{isNew ? "Used in the HBL No. (NNRMNL" + (podCode || "___") + "F…)." : "Changing it does not change the issued HBL No."}</p>
-        </Field>
+        {hblType === "NNR" && (
+          <Field label="HBL destination code" error={err.podCode} flag={flags.podCode}>
+            <input
+              className="input font-mono uppercase"
+              name="podCode"
+              value={podCode}
+              maxLength={3}
+              placeholder="e.g. TYO"
+              onChange={(e) => {
+                setPodCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""));
+                setPodTouched(true);
+              }}
+            />
+            <p className="mt-1 text-xs text-slate-500">{isNew ? "Used in the HBL No. (NNRMNL" + (podCode || "___") + "F…)." : "Changing it does not change the issued HBL No."}</p>
+          </Field>
+        )}
         <Field label="Part of HBL (split shipment, optional)" error={err.partOfHblNo}>
           <input className="input font-mono uppercase" name="partOfHblNo" defaultValue={v("partOfHblNo")} placeholder="e.g. NNRMNLNGOF8665" />
         </Field>
@@ -231,11 +235,33 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             <option value="LCL">LCL</option>
           </select>
         </Field>
-        <Field label="Booking number" error={err.carrierBookingRef}>
-          <input className="input" name="carrierBookingRef" defaultValue={v("carrierBookingRef")} />
+        <Field label={hblType === "DIRECT" ? "Booking number * (becomes the HBL)" : "Booking number"} error={err.carrierBookingRef}>
+          <input
+            className="input"
+            name="carrierBookingRef"
+            defaultValue={v("carrierBookingRef")}
+            required={hblType === "DIRECT"}
+            onChange={(e) => setBooking(e.target.value)}
+          />
         </Field>
-        <Field label="HBL" span={2}>
-          <p className="input bg-slate-50 font-mono text-slate-600">{hblNo ?? (isNew ? `Assigned on save (NNRMNL${podCode || "___"}${cargoType === "FCL" ? "F" : "L"}…)` : "—")}</p>
+        <Field label="HBL" error={err.hblType} span={2}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="hblType" value="NNR" checked={hblType === "NNR"} onChange={() => setHblType("NNR")} /> NNR Consolidation
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="hblType" value="DIRECT" checked={hblType === "DIRECT"} onChange={() => setHblType("DIRECT")} /> Direct
+            </label>
+          </div>
+          <p className="input mt-1 bg-slate-50 font-mono text-slate-600">
+            {hblType === "DIRECT"
+              ? booking.trim()
+                ? booking.trim().toUpperCase()
+                : "= booking number"
+              : initial.hblType === "NNR" && hblNo
+                ? hblNo
+                : `New NNR number on save (NNRMNL${podCode || "___"}${cargoType === "FCL" ? "F" : "L"}…)`}
+          </p>
         </Field>
 
         {cargoType === "FCL" ? (
@@ -253,9 +279,10 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
                 {PORTS_OF_LOADING.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Cut-off time" error={err.cyCutoffAt}>
-              <input className="input" type="date" name="cyCutoffAt" defaultValue={v("cyCutoffAt")} onChange={(e) => setCutoffPreview(e.target.value)} />
-              {cutoffPreview && <p className="mt-1 font-mono text-xs text-slate-500">{formatInstructionDate(parseManilaInput(`${cutoffPreview}T00:00`))}</p>}
+            <Field label="Cut-off time (same as positioning date)">
+              <p className="input bg-slate-50 font-mono text-slate-600">
+                {positioningPreview ? formatInstructionDate(parseManilaInput(positioningPreview)) : "Follows the positioning date"}
+              </p>
             </Field>
             <Field label="Container size (tick and enter how many)" error={err.containerPlan} flag={flags.containerPlan} span={3}>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -340,11 +367,11 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Arrastre cut-off" error={err.arrastreCutoffAt}>
           <input className="input" type="datetime-local" name="arrastreCutoffAt" defaultValue={v("arrastreCutoffAt")} />
         </Field>
-        <Field label="ETD MNL" error={err.etdMnl}>
-          <input className="input" type="datetime-local" name="etdMnl" defaultValue={v("etdMnl")} />
+        <Field label="ETD MNL (date)" error={err.etdMnl}>
+          <input className="input" type="date" name="etdMnl" defaultValue={v("etdMnl").slice(0, 10)} />
         </Field>
-        <Field label="ETA" error={err.eta}>
-          <input className="input" type="datetime-local" name="eta" defaultValue={v("eta")} />
+        <Field label="ETA (date)" error={err.eta}>
+          <input className="input" type="date" name="eta" defaultValue={v("eta").slice(0, 10)} />
         </Field>
       </Section>
 
