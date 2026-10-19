@@ -53,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/intake" className="text-slate-700 hover:text-blue-700">From email</Link>
                   <Link href="/shippers" className="text-slate-700 hover:text-blue-700">Shippers</Link>
                   <Link href="/transport" className="text-slate-700 hover:text-blue-700">Transport</Link>
+                  <Link href="/carriers" className="text-slate-700 hover:text-blue-700">Carriers</Link>
                   <Link href="/unbilled" className="text-slate-700 hover:text-blue-700" title="Departed shipments not yet billed">
                     Unbilled{unbilled > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900">{unbilled}</span>}
                   </Link>

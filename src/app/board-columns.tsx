@@ -4,13 +4,15 @@ import { STATUS_LABEL } from "@/lib/status";
 import type { DeadlineStatus } from "@/lib/deadline-status";
 import type { DueState } from "@/lib/due";
 import { containerText, lclText, SHEET_COLUMNS, type SheetKey } from "@/lib/nnr-sheet";
+import type { TrackTarget } from "@/lib/tracking";
+import { TrackLink } from "@/components/TrackLink";
 
 // Board columns follow NNR's monitoring sheet (src/lib/nnr-sheet.ts), so the board reads like the
 // spreadsheet staff already know. Deadline columns are coloured: red overdue, amber due within 4h.
 // App-only columns (status, CS, Job No.) come after REMARKS.
 
 export type BoardRow = Shipment & { shipper: { name: string }; assignedCs: { name: string } };
-type Ctx = { deadlines: Record<string, DeadlineStatus> };
+type Ctx = { deadlines: Record<string, DeadlineStatus>; track?: TrackTarget | null };
 export type Column = { header: string; cell: (s: BoardRow, c: Ctx) => React.ReactNode; className?: string };
 
 const CELL_STATE: Record<DueState, string> = {
@@ -55,7 +57,7 @@ function declaration(by: "SHIPPER" | "NNR") {
 
 const SHEET_CELLS: Record<SheetKey, Column["cell"]> = {
   hbl: (s) => <span className="font-mono">{s.hblNo ?? (/DIRECT BL/i.test(s.carrierRemarks ?? "") ? "DIRECT BL" : "(no HBL)")}{s.partOfHblNo && <span className="block text-xs text-slate-500">part of {s.partOfHblNo}</span>}</span>,
-  booking: (s) => <span className="font-mono">{s.carrierBookingRef}</span>,
+  booking: (s, c) => (s.carrierBookingRef ? <TrackLink refNo={s.carrierBookingRef} target={c.track ?? null} className="font-mono" /> : null),
   shipper: (s) => s.shipper.name,
   destination: (s) => s.destinationPort,
   etd: (s) => day(s.etdMnl),

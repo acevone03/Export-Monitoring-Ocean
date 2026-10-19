@@ -14,6 +14,8 @@ import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
 import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction, sendPickupInstructionAction } from "./actions";
 import { instructionRows, getTransportEmails } from "@/lib/pickup-instruction";
+import { getCarrierLinks, trackingTarget } from "@/lib/tracking";
+import { TrackLink } from "@/components/TrackLink";
 import type { RevertKind } from "@/lib/shipments";
 import { FieldLinkPanel } from "@/components/FieldLinkPanel";
 
@@ -62,7 +64,7 @@ export default async function ShipmentPage({
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const billable = s.status !== "CANCELLED"; // payments and billing can be recorded after closing
   const missing = missingMandatory(s);
-  const transportEmails = await getTransportEmails(prisma);
+  const [transportEmails, carriers] = await Promise.all([getTransportEmails(prisma), getCarrierLinks(prisma)]);
   const lastInstruction = s.events.find((e) => e.type === "PICKUP_INSTRUCTION_SENT" || e.type === "PICKUP_INSTRUCTION_FAILED");
   const moot = deadlinesMoot(s);
   // Supervisors can undo a step recorded by mistake (logged, nothing deleted).
@@ -150,7 +152,17 @@ export default async function ShipmentPage({
             <Row k="Shipping line / co-loader" v={s.carrierName} />
             <Row k="Vessel / voyage" v={[s.vesselName, s.voyageNo ? `V.${s.voyageNo}` : null].filter(Boolean).join(" ") || null} />
             <Row k="Freight / Incoterms" v={[s.freightTerms === "PREPAID" ? "Prepaid" : s.freightTerms === "COLLECT" ? "Collect" : null, s.incoterm].filter(Boolean).join(" · ") || null} />
-            <Row k="Booking no." v={s.carrierBookingRef} mono />
+            <dt className="text-slate-500">Booking no.</dt>
+            <dd>
+              {s.carrierBookingRef ? (
+                <>
+                  <TrackLink refNo={s.carrierBookingRef} target={trackingTarget(carriers, s.carrierName, s.carrierBookingRef)} className="font-mono" />
+                  {!trackingTarget(carriers, s.carrierName, s.carrierBookingRef) && s.carrierName && (
+                    <Link href="/carriers" className="ml-2 text-xs text-slate-500 hover:underline">add a tracking link for {s.carrierName}</Link>
+                  )}
+                </>
+              ) : <span className="text-slate-400">—</span>}
+            </dd>
             <Row k="Remarks" v={s.carrierRemarks} />
             <Row k="Requested pick-up" v={formatDateTime(s.requestedPickupAt)} />
             <Row k="FSI cut-off" v={formatDateTime(s.fsiCutoffAt)} />

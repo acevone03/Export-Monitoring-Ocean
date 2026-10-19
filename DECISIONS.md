@@ -508,3 +508,12 @@ New shipment fields: **Commodity description** (now for FCL and LCL; it was LCL-
 **Incoterms** (Incoterms 2020 list: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP), **Vessel name** and **Voyage no.**
 All optional. They print on the booking sheet (VESSEL NAME AND VOYAGE#, PREPAID/COLLECT tick, INCOTERMS, COMMODITY) and show on
 the shipment page; the commodity is also on the transport pick-up instruction.
+
+## Booking number → shipping line track & trace (19-Oct-2026)
+
+Clicking a booking number (shipment page, board) opens the shipping line's tracking page in a new tab and copies the
+number. The line is matched from "Shipping line / co-loader" by name or alias. Default list (official pages checked
+19-Oct-2026): Maersk, MSC, CMA CGM, ONE, Evergreen, COSCO, Hapag-Lloyd, Wan Hai, OOCL, Yang Ming. ONE and COSCO take the
+number in the link (`{ref}`), so the result opens directly; the others open their tracking page and CS paste the copied
+number. Supervisors and CS edit the list on **Carriers** (`/carriers`, AppSetting `CARRIER_TRACKING`): add co-loaders,
+other spellings, or a `{ref}` link when a carrier supports one. Only https links are used. Unknown carriers get no link.

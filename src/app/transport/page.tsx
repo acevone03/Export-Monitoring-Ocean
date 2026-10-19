@@ -34,6 +34,10 @@ export default async function TransportPage() {
         </ActionForm>
       </section>
 
+      <p className="text-sm text-slate-600">
+        Shipping line track &amp; trace links for booking numbers: <a href="/carriers" className="text-blue-700 underline">Carriers</a>.
+      </p>
+
       {!smtpConfigured() && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
           Email server (SMTP) is not set up, so instructions go to the dev outbox instead of real inboxes. Set <code>SMTP_*</code> in <code>.env</code> to send for real.

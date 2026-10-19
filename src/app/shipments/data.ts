@@ -2,17 +2,19 @@ import "server-only";
 import type { Shipment } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { COMMON_PORTS } from "@/lib/ports";
+import { getCarrierLinks } from "@/lib/tracking";
 import { toManilaDateInput, toManilaInput } from "@/lib/time";
 import type { ShipmentFormValues } from "@/components/ShipmentForm";
 
 export async function formOptions() {
-  const [shippers, csUsers, used] = await Promise.all([
+  const [shippers, csUsers, used, carriers] = await Promise.all([
     prisma.shipper.findMany({ orderBy: { name: "asc" }, select: { id: true, code: true, name: true, contactPerson: true, phone: true, email: true, defaultPickupAddress: true, defaultArrastre: true } }),
     prisma.user.findMany({ where: { active: true, role: { in: ["CS", "SUPERVISOR"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.shipment.findMany({ distinct: ["destinationPort"], select: { destinationPort: true, pod: true } }),
+    getCarrierLinks(prisma),
   ]);
   const destinations = [...new Set([...COMMON_PORTS, ...used.flatMap((u) => [u.destinationPort, u.pod])])].sort();
-  return { shippers, csUsers, destinations };
+  return { shippers, csUsers, destinations, carrierNames: carriers.map((c) => c.name) };
 }
 
 export function toFormValues(s: Shipment): ShipmentFormValues {

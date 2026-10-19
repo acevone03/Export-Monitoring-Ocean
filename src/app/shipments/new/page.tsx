@@ -5,7 +5,7 @@ import { createShipmentAction } from "./actions";
 
 export default async function NewShipmentPage() {
   const user = await requireUser(["CS", "SUPERVISOR"]);
-  const { shippers, csUsers, destinations } = await formOptions();
+  const { shippers, csUsers, destinations, carrierNames } = await formOptions();
   return (
     <div className="space-y-4">
       <div>
@@ -19,6 +19,7 @@ export default async function NewShipmentPage() {
         shippers={shippers}
         csUsers={csUsers}
         destinations={destinations}
+        carrierNames={carrierNames}
         initial={{
           shipperId: "", consigneeName: "", pickupAddress: "", destinationPort: "", pod: "", cargoType: "FCL",
           containerPlan: [], lclQty: "", lclUnit: "",

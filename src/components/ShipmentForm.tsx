@@ -83,11 +83,13 @@ type Props = {
   initialShipperName?: string;
   /** HBL No. of an existing shipment (edit). New shipments get theirs on save. */
   hblNo?: string | null;
+  /** Shipping lines with tracking links, suggested in the carrier field. */
+  carrierNames?: string[];
   /** Positioning and port of loading must be filled for FCL (new shipments, and edits before pick-up). */
   requireInstruction?: boolean;
 };
 
-export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo, requireInstruction = isNew }: Props) {
+export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo, requireInstruction = isNew, carrierNames = [] }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const err = state.fieldErrors ?? {};
@@ -398,7 +400,8 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
 
       <Section title="Carrier">
         <Field label="Shipping line / co-loader" error={err.carrierName}>
-          <input className="input" name="carrierName" defaultValue={v("carrierName")} />
+          <input className="input" name="carrierName" list="carrier-list" defaultValue={v("carrierName")} autoComplete="off" placeholder="e.g. Maersk" />
+          <datalist id="carrier-list">{carrierNames.map((n) => <option key={n} value={n} />)}</datalist>
         </Field>
         <Field label="Vessel name" error={err.vesselName}>
           <input className="input" name="vesselName" defaultValue={v("vesselName")} maxLength={100} placeholder="e.g. MAERSK KOWLOON" />

@@ -19,7 +19,7 @@ export default async function IntakeReviewPage({ params }: { params: Promise<{ i
     : null;
 
   const parsed = intake.extractedJson ? ExtractionSchema.safeParse(intake.extractedJson) : null;
-  const { shippers, csUsers, destinations } = await formOptions();
+  const { shippers, csUsers, destinations, carrierNames } = await formOptions();
   const mapped = parsed?.success ? extractionToForm(parsed.data, shippers, user.role === "CS" ? user.id : "") : null;
   const flagged = mapped ? Object.keys(mapped.flags).length : 0;
 
@@ -88,6 +88,7 @@ export default async function IntakeReviewPage({ params }: { params: Promise<{ i
                 shippers={shippers}
                 csUsers={csUsers}
                 destinations={destinations}
+                carrierNames={carrierNames}
                 initial={mapped.values}
                 flags={mapped.flags}
                 initialShipperName={mapped.values.shipperId ? undefined : mapped.shipperNameFromEmail ?? undefined}
