@@ -5,13 +5,15 @@ import { prisma } from "@/lib/db";
 import { requireUser, can, assertShipmentAccess } from "@/lib/auth";
 import { now as clockNow } from "@/lib/clock";
 import { formatDateTime } from "@/lib/time";
+import { containerPlanText } from "@/lib/containers";
 import { STATUS_LABEL } from "@/lib/status";
 import { dueState, type DueState } from "@/lib/due";
 import { missingMandatory } from "@/lib/mandatory";
 import { deadlinesMoot } from "@/lib/deadline-status";
 import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
-import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction } from "./actions";
+import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction, sendPickupInstructionAction } from "./actions";
+import { instructionRows, getTransportEmails } from "@/lib/pickup-instruction";
 import type { RevertKind } from "@/lib/shipments";
 import { FieldLinkPanel } from "@/components/FieldLinkPanel";
 
@@ -29,11 +31,11 @@ export default async function ShipmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string }>;
+  searchParams: Promise<{ created?: string; pi?: string }>;
 }) {
   const user = await requireUser(["CS", "SUPERVISOR"]);
   const { id } = await params;
-  const { created } = await searchParams;
+  const { created, pi } = await searchParams;
   await assertShipmentAccess(user, id);
   const s = await prisma.shipment
     .findUnique({
@@ -59,12 +61,14 @@ export default async function ShipmentPage({
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
   const missing = missingMandatory(s);
+  const transportEmails = await getTransportEmails(prisma);
+  const lastInstruction = s.events.find((e) => e.type === "PICKUP_INSTRUCTION_SENT" || e.type === "PICKUP_INSTRUCTION_FAILED");
   const moot = deadlinesMoot(s);
   // Supervisors can undo a step recorded by mistake (logged, nothing deleted).
   const rv = (kind: RevertKind) => (user.role === "SUPERVISOR" ? <RevertForm shipmentId={s.id} kind={kind} /> : null); // after departure / cancel / close, open deadlines no longer turn red
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
-    ? `FCL ${plan.map((c) => `${c.qty}×${c.size === "40HC" ? "40'HC" : `${c.size}'`}`).join(" + ")}`
+    ? `FCL ${containerPlanText(plan)}`
     : `LCL ${s.lclQty ?? "?"} ${s.lclUnit === "BOX" ? "boxes" : "pallets"}`;
 
   return (
@@ -72,6 +76,17 @@ export default async function ShipmentPage({
       {created && (
         <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
           Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.
+          {pi === "sent" && <> Pick-up instruction emailed to transport ({transportEmails.join(", ")}).</>}
+        </div>
+      )}
+      {created && pi === "no_recipients" && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          Pick-up instruction was not sent: no transport email is saved. <Link href="/transport" className="underline">Add one under Transport</Link>, then use “Send to transport” below.
+        </div>
+      )}
+      {created && pi === "failed" && (
+        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-900">
+          Pick-up instruction could not be emailed (see the timeline). Use “Send to transport” below to try again.
         </div>
       )}
 
@@ -298,6 +313,34 @@ export default async function ShipmentPage({
           )}
         </section>
       </div>
+
+      <section className="card">
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="font-semibold">Pick-up instruction ({s.cargoType})</h2>
+          <p className="text-sm text-slate-600">
+            {s.pickupInstructionSentAt
+              ? `Last emailed to transport ${formatDateTime(s.pickupInstructionSentAt)}.`
+              : "Not emailed to transport yet."}
+            {lastInstruction?.type === "PICKUP_INSTRUCTION_FAILED" && <span className="ml-1 text-red-700">Last attempt failed.</span>}
+          </p>
+          {open && (
+            <ActionForm action={sendPickupInstructionAction} className="ml-auto flex flex-wrap items-center gap-2">
+              <input type="hidden" name="shipmentId" value={s.id} />
+              <span className="text-xs text-slate-500">
+                To: {transportEmails.length ? transportEmails.join(", ") : <Link href="/transport" className="text-blue-700 underline">add transport email</Link>}
+              </span>
+              <button className="btn-secondary py-1" disabled={transportEmails.length === 0}>
+                {s.pickupInstructionSentAt ? "Resend to transport" : "Send to transport"}
+              </button>
+            </ActionForm>
+          )}
+        </div>
+        <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+          {instructionRows(s).map(([k, v]) => (
+            <Row key={k} k={k} v={v || null} />
+          ))}
+        </dl>
+      </section>
 
       <section className="card">
         <h2 className="mb-3 font-semibold">Timeline</h2>

@@ -40,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/shipments/new" className="text-slate-700 hover:text-blue-700">New shipment</Link>
                   <Link href="/intake" className="text-slate-700 hover:text-blue-700">From email</Link>
                   <Link href="/shippers" className="text-slate-700 hover:text-blue-700">Shippers</Link>
+                  <Link href="/transport" className="text-slate-700 hover:text-blue-700">Transport</Link>
                 </>
               )}
               {can.viewDailyReport(user) && <Link href="/reports/daily" className="text-slate-700 hover:text-blue-700">Daily report</Link>}

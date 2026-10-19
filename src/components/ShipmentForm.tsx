@@ -3,6 +3,8 @@
 import { useActionState, useRef, useState } from "react";
 import type { FieldErrors } from "@/lib/shipment-input";
 import { podCodeFor } from "@/lib/pod-codes";
+import { CONTAINER_SIZES, CONTAINER_LABEL, PORTS_OF_LOADING, type ContainerSize } from "@/lib/containers";
+import { formatInstructionDate, formatInstructionDateTime, parseManilaInput } from "@/lib/time";
 
 // `values` echoes the submitted fields on error: React 19 resets the form after an
 // action, and uncontrolled fields reset to their defaultValue, so we feed it back.
@@ -18,7 +20,7 @@ export type ShipperOption = {
   defaultArrastre: "NNR" | "SHIPPER";
 };
 export type CsOption = { id: string; name: string };
-type Container = { size: "20" | "40" | "40HC"; qty: number };
+type Container = { size: ContainerSize; qty: number };
 
 export type ShipmentFormValues = {
   shipperId: string;
@@ -45,6 +47,20 @@ export type ShipmentFormValues = {
   declarationBy: "NNR" | "SHIPPER";
   declarationForwarder: string;
   partOfHblNo: string;
+  // Pick-up instruction (sent to transport). FCL:
+  positioningAt: string; // datetime-local, Manila
+  containerYard: string;
+  portOfLoading: string;
+  cyCutoffAt: string; // date (YYYY-MM-DD)
+  // LCL:
+  consolidator: string;
+  grossWeightKg: string;
+  cbm: string;
+  cargoDescription: string;
+  cargoDimensions: string;
+  deliveryWarehouse: string;
+  // Both:
+  pickupRemarks: string;
 };
 
 type Props = {
@@ -59,9 +75,11 @@ type Props = {
   flags?: Partial<Record<keyof ShipmentFormValues, string>>;
   /** Shipper text to show when no shipper matched (e.g. the name as written in the email). */
   initialShipperName?: string;
+  /** HBL No. of an existing shipment (edit). New shipments get theirs on save. */
+  hblNo?: string | null;
 };
 
-export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName }: Props) {
+export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const err = state.fieldErrors ?? {};
@@ -87,9 +105,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
   };
   const [arrastreTouched, setArrastreTouched] = useState(!isNew);
   const [cargoType, setCargoType] = useState(initial.cargoType);
-  const [containers, setContainers] = useState<Container[]>(
-    initial.containerPlan.length ? initial.containerPlan : [{ size: "40HC", qty: 1 }],
-  );
+  // Container size ticks: qty per size, 0 = not ticked.
+  const [qtyBySize, setQtyBySize] = useState<Record<ContainerSize, number>>(() => {
+    const q = Object.fromEntries(CONTAINER_SIZES.map((z) => [z, 0])) as Record<ContainerSize, number>;
+    for (const c of initial.containerPlan) if (c.size in q) q[c.size] += c.qty;
+    return q;
+  });
+  const containers: Container[] = CONTAINER_SIZES.filter((z) => qtyBySize[z] > 0).map((z) => ({ size: z, qty: qtyBySize[z] }));
+  const [positioningPreview, setPositioningPreview] = useState(v("positioningAt"));
+  const [cutoffPreview, setCutoffPreview] = useState(v("cyCutoffAt"));
 
   function pickShipper(typed: string) {
     const t = typed.trim().toLowerCase();
@@ -102,8 +126,6 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
     if (!addressTouched) setPickupAddress(match?.defaultPickupAddress ?? "");
   }
 
-  const usedSizes = new Set(containers.map((c) => c.size));
-  const nextFreeSize = (["40HC", "40", "20"] as const).find((s) => !usedSizes.has(s));
 
   return (
     <form
@@ -200,65 +222,107 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         </datalist>
       </Section>
 
-      <Section title="Cargo">
+      <Section title="Cargo and pick-up instruction (sent to transport)">
         <Field label="Cargo type" error={err.cargoType} flag={flags.cargoType}>
           <select className="input" name="cargoType" value={cargoType} onChange={(e) => setCargoType(e.target.value as "FCL" | "LCL")}>
             <option value="FCL">FCL</option>
             <option value="LCL">LCL</option>
           </select>
         </Field>
+        <Field label="Booking number" error={err.carrierBookingRef}>
+          <input className="input" name="carrierBookingRef" defaultValue={v("carrierBookingRef")} />
+        </Field>
+        <Field label="HBL" span={2}>
+          <p className="input bg-slate-50 font-mono text-slate-600">{hblNo ?? (isNew ? `Assigned on save (NNRMNL${podCode || "___"}${cargoType === "FCL" ? "F" : "L"}…)` : "—")}</p>
+        </Field>
+
         {cargoType === "FCL" ? (
-          <Field label="Containers" error={err.containerPlan} flag={flags.containerPlan} span={3}>
-            <div className="space-y-2">
-              {containers.map((c, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    aria-label="Quantity"
-                    className="input w-20"
-                    value={c.qty}
-                    onChange={(e) => setContainers(containers.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))}
-                  />
-                  <span className="text-slate-500">×</span>
-                  <select
-                    aria-label="Container size"
-                    className="input w-28"
-                    value={c.size}
-                    onChange={(e) => setContainers(containers.map((x, j) => (j === i ? { ...x, size: e.target.value as Container["size"] } : x)))}
-                  >
-                    <option value="20">20&apos;</option>
-                    <option value="40">40&apos;</option>
-                    <option value="40HC">40&apos; HC</option>
-                  </select>
-                  {containers.length > 1 && (
-                    <button type="button" className="text-sm text-slate-500 hover:text-red-700" onClick={() => setContainers(containers.filter((_, j) => j !== i))}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-              {nextFreeSize && (
-                <button type="button" className="text-sm text-blue-700 hover:underline" onClick={() => setContainers([...containers, { size: nextFreeSize, qty: 1 }])}>
-                  + Add another size
-                </button>
+          <>
+            <Field label="Positioning date and time" error={err.positioningAt}>
+              <input className="input" type="datetime-local" name="positioningAt" defaultValue={v("positioningAt")} onChange={(e) => setPositioningPreview(e.target.value)} />
+              {positioningPreview && <p className="mt-1 font-mono text-xs text-slate-500">{formatInstructionDateTime(parseManilaInput(positioningPreview))}</p>}
+            </Field>
+            <Field label="Container yard" error={err.containerYard}>
+              <input className="input" name="containerYard" defaultValue={v("containerYard")} placeholder="Where to get the empty" />
+            </Field>
+            <Field label="Port of loading" error={err.portOfLoading}>
+              <select className="input" name="portOfLoading" defaultValue={v("portOfLoading")}>
+                <option value="">Choose…</option>
+                {PORTS_OF_LOADING.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Cut-off time" error={err.cyCutoffAt}>
+              <input className="input" type="date" name="cyCutoffAt" defaultValue={v("cyCutoffAt")} onChange={(e) => setCutoffPreview(e.target.value)} />
+              {cutoffPreview && <p className="mt-1 font-mono text-xs text-slate-500">{formatInstructionDate(parseManilaInput(`${cutoffPreview}T00:00`))}</p>}
+            </Field>
+            <Field label="Container size (tick and enter how many)" error={err.containerPlan} flag={flags.containerPlan} span={3}>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {CONTAINER_SIZES.map((z) => {
+                  const on = qtyBySize[z] > 0;
+                  return (
+                    <div key={z} className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${on ? "border-blue-300 bg-blue-50" : "border-slate-200"}`}>
+                      <label className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(e) => setQtyBySize({ ...qtyBySize, [z]: e.target.checked ? 1 : 0 })}
+                        />
+                        {CONTAINER_LABEL[z]}
+                      </label>
+                      <span className="text-slate-400">×</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        aria-label={`How many ${CONTAINER_LABEL[z]}`}
+                        className="input w-16 py-1"
+                        disabled={!on}
+                        value={on ? qtyBySize[z] : ""}
+                        onChange={(e) => setQtyBySize({ ...qtyBySize, [z]: Math.max(1, Math.min(99, Number(e.target.value) || 1)) })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {containers.length > 0 && (
+                <p className="mt-1 text-xs text-slate-600">{containers.map((c) => `${c.qty}x${CONTAINER_LABEL[c.size]}`).join(" + ")}</p>
               )}
-            </div>
-          </Field>
+            </Field>
+          </>
         ) : (
           <>
-            <Field label="LCL quantity" error={err.lclQty} flag={flags.lclQty}>
-              <input className="input" type="number" min={1} name="lclQty" defaultValue={v("lclQty")} />
+            <Field label="Consol" error={err.consolidator}>
+              <input className="input" name="consolidator" defaultValue={v("consolidator")} placeholder="Consolidator / co-loader" />
             </Field>
-            <Field label="Unit">
-              <select className="input" name="lclUnit" defaultValue={v("lclUnit") || "PALLET"}>
-                <option value="PALLET">Pallets</option>
-                <option value="BOX">Boxes</option>
-              </select>
+            <Field label="Quantity" error={err.lclQty} flag={flags.lclQty}>
+              <div className="flex gap-2">
+                <input className="input w-24" type="number" min={1} name="lclQty" defaultValue={v("lclQty")} aria-label="Quantity" />
+                <select className="input" name="lclUnit" defaultValue={v("lclUnit") || "PALLET"} aria-label="Unit">
+                  <option value="PALLET">Pallets</option>
+                  <option value="BOX">Boxes</option>
+                </select>
+              </div>
+            </Field>
+            <Field label="GW (kg)" error={err.grossWeightKg}>
+              <input className="input" type="number" min={0} step="any" name="grossWeightKg" defaultValue={v("grossWeightKg")} />
+            </Field>
+            <Field label="CBM" error={err.cbm}>
+              <input className="input" type="number" min={0} step="any" name="cbm" defaultValue={v("cbm")} />
+            </Field>
+            <Field label="Description" error={err.cargoDescription} span={2}>
+              <input className="input" name="cargoDescription" defaultValue={v("cargoDescription")} placeholder="e.g. Dried mangoes in cartons" />
+            </Field>
+            <Field label="Cargo dimension" error={err.cargoDimensions} span={2}>
+              <input className="input" name="cargoDimensions" defaultValue={v("cargoDimensions")} placeholder="e.g. 4 pallets @ 120 x 100 x 150 cm" />
+            </Field>
+            <Field label="Delivery warehouse" error={err.deliveryWarehouse} span={2}>
+              <input className="input" name="deliveryWarehouse" defaultValue={v("deliveryWarehouse")} placeholder="CFS / consol warehouse" />
             </Field>
           </>
         )}
+        <Field label="Remarks (for transport)" error={err.pickupRemarks} span={cargoType === "FCL" ? 1 : 2}>
+          <textarea className="input" rows={2} name="pickupRemarks" defaultValue={v("pickupRemarks")} />
+        </Field>
       </Section>
 
       <Section title="Schedule and cut-offs (Manila time)">
@@ -285,9 +349,6 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
       <Section title="Carrier">
         <Field label="Shipping line / co-loader" error={err.carrierName}>
           <input className="input" name="carrierName" defaultValue={v("carrierName")} />
-        </Field>
-        <Field label="Booking no." error={err.carrierBookingRef}>
-          <input className="input" name="carrierBookingRef" defaultValue={v("carrierBookingRef")} />
         </Field>
         <Field label="Remarks" error={err.carrierRemarks} span={2}>
           <input className="input" name="carrierRemarks" defaultValue={v("carrierRemarks")} />

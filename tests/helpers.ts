@@ -39,6 +39,17 @@ export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId
     declarationBy: "NNR",
     declarationForwarder: null,
     partOfHblNo: null,
+    positioningAt: null,
+    containerYard: null,
+    portOfLoading: null,
+    cyCutoffAt: null,
+    consolidator: null,
+    grossWeightKg: null,
+    cbm: null,
+    cargoDescription: null,
+    cargoDimensions: null,
+    deliveryWarehouse: null,
+    pickupRemarks: null,
     ...o,
   };
 }

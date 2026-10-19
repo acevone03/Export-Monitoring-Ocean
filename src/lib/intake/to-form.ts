@@ -103,6 +103,8 @@ export function extractionToForm(
       declarationBy: "NNR",
       declarationForwarder: "",
       partOfHblNo: "",
+      positioningAt: "", containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
+      cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
     },
   };
 }

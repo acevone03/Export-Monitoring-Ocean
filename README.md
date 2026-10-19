@@ -47,6 +47,12 @@ Every shipper has a permanent code (`SHP-0001`, …) assigned when it is added, 
 once (case, punctuation and Inc/Corp are ignored). On **New shipment**, type the shipper's name or code:
 the contact line and pick-up address fill in from the shipper (the address can be changed per shipment).
 
+### Pick-up instruction to transport
+
+Save the trucking company's email addresses under **Transport**. When a shipment is created, its pick-up
+instruction (FCL: positioning, container yard, sizes, port of loading, cut-off; LCL: consol, GW, CBM,
+dimensions, delivery warehouse) is emailed to them. Resend from the shipment page. Without SMTP it lands in `/dev/outbox`.
+
 ### Scripture
 
 A verse of the day (Psalms and the writings of the apostles and Paul, KJV) shows under the menu; **Scripture**

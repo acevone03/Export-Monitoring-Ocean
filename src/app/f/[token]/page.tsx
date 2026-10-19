@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { resolveFieldLink } from "@/lib/field-links";
 import { formatDateTime } from "@/lib/time";
+import { containerPlanText } from "@/lib/containers";
 import { verseOfTheDay } from "@/lib/scripture";
 import { FieldActions } from "./FieldActions";
 import { fieldAction } from "./actions";
@@ -32,7 +33,7 @@ export default async function FieldPage({ params }: { params: Promise<{ token: s
   const s = link.shipment;
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
-    ? plan.map((c) => `${c.qty} × ${c.size === "40HC" ? "40' HC" : `${c.size}'`}`).join(" + ")
+    ? containerPlanText(plan)
     : `LCL ${s.lclQty ?? "?"} ${s.lclUnit === "BOX" ? "boxes" : "pallets"}`;
 
   const buttons = [

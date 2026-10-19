@@ -14,6 +14,7 @@ import type { ShipmentFormState } from "@/components/ShipmentForm";
 import { createFieldLink, revokeFieldLink } from "@/lib/field-links";
 import { formatDateTime } from "@/lib/time";
 import { formValuesOf } from "../data";
+import { sendPickupInstruction } from "@/lib/pickup-instruction";
 
 export type ActionState = { ok?: string; error?: string };
 
@@ -164,4 +165,18 @@ export async function revertMilestoneAction(_prev: ActionState, form: FormData):
   }
   revalidatePath(`/shipments/${p.data.shipmentId}`);
   return { ok: "Reverted." };
+}
+
+// ---------- pick-up instruction to transport
+
+export async function sendPickupInstructionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser(["CS", "SUPERVISOR"]);
+  const shipmentId = Id.safeParse(form.get("shipmentId"));
+  if (!shipmentId.success) return { error: "Invalid request." };
+  await assertShipmentAccess(user, shipmentId.data);
+  const r = await sendPickupInstruction(prisma, shipmentId.data, user.id, await now());
+  revalidatePath(`/shipments/${shipmentId.data}`);
+  if (r.status === "no_recipients") return { error: "No transport email saved yet. Add one under Transport first." };
+  if (r.status === "failed") return { error: `Not sent: ${r.error}` };
+  return { ok: `Sent to ${r.to.join(", ")}` };
 }

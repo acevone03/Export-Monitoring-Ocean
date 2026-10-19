@@ -433,3 +433,19 @@ real data are **not** in the repository; tests use invented rows under the real 
    field link; it changes at Manila midnight and cycles through 100 chosen verses. `/scripture` has the
    full text by book and chapter, and a word search. Mark and Luke (not written by apostles) are left out;
    add them in `scripts/gen-scripture.mjs` if wanted.
+
+## Pick-up instruction to transport (19-Oct-2026)
+
+1. **New shipment** has a "Cargo and pick-up instruction" section that changes with the cargo type.
+   FCL: booking number, HBL (assigned on save), positioning date/time, container yard, container size
+   (tick 40 / 20 / 40HC / 20 Reefer / 40 Reefer and enter how many), port of loading
+   (MICP/NORTH, SOUTH/ATI, PORT OF BATANGAS, SUBIC), cut-off (date only), remarks.
+   LCL: booking number, HBL, consol, quantity, GW (kg), CBM, description, cargo dimension,
+   delivery warehouse, remarks. Fields for the other cargo type are cleared on save.
+2. **Dates on the instruction** are written `13/NOV/2026 13:00H` (positioning) and `13/NOV/2026` (cut-off), Manila time.
+3. **Transport emails** are saved on the Transport page (AppSetting `TRANSPORT_EMAILS`). When CS create a shipment
+   (form or email intake), the instruction is emailed to all of them right after save. The shipment is saved even if
+   the email fails; the result shows on the shipment page and the timeline, and "Send / Resend to transport" sends it again.
+   Edits do not resend automatically.
+4. **[ASSUMPTION]** "SOUT/ATI" in the request is South Harbor (ATI), listed as `SOUTH/ATI`.
+5. **Reefers**: container sizes `20RF` and `40RF` added. In the NNR sheet export, 20RF goes in the 20FT column and 40RF in the 40FT column.

@@ -41,6 +41,17 @@ export function toFormValues(s: Shipment): ShipmentFormValues {
     declarationBy: s.declarationBy,
     declarationForwarder: s.declarationForwarder ?? "",
     partOfHblNo: s.partOfHblNo ?? "",
+    positioningAt: toManilaInput(s.positioningAt),
+    containerYard: s.containerYard ?? "",
+    portOfLoading: s.portOfLoading ?? "",
+    cyCutoffAt: toManilaInput(s.cyCutoffAt).slice(0, 10),
+    consolidator: s.consolidator ?? "",
+    grossWeightKg: s.grossWeightKg?.toString() ?? "",
+    cbm: s.cbm?.toString() ?? "",
+    cargoDescription: s.cargoDescription ?? "",
+    cargoDimensions: s.cargoDimensions ?? "",
+    deliveryWarehouse: s.deliveryWarehouse ?? "",
+    pickupRemarks: s.pickupRemarks ?? "",
   };
 }
 

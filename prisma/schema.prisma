@@ -223,6 +223,24 @@ model Shipment {
   carrierName    String?
   carrierRemarks String?
 
+  // Pick-up instruction sent to the transport (trucking) company. FCL and LCL use different fields;
+  // the form clears the ones that do not apply to the cargo type.
+  // FCL: empty-container positioning, container yard, port of loading, cut-off (date only).
+  positioningAt     DateTime?
+  containerYard     String?
+  portOfLoading     String?   // MICP/NORTH | SOUTH/ATI | PORT OF BATANGAS | SUBIC (see PORTS_OF_LOADING)
+  cyCutoffAt        DateTime? // date only, stored as Manila midnight
+  // LCL: consolidator, weight, volume, description, dimensions, warehouse to deliver to.
+  consolidator      String?
+  grossWeightKg     Float?
+  cbm               Float?
+  cargoDescription  String?
+  cargoDimensions   String?
+  deliveryWarehouse String?
+  // Both
+  pickupRemarks     String?
+  pickupInstructionSentAt DateTime? // last time it was emailed to transport
+
   etdMnl DateTime? // null allowed at DB level so intake can save; flagged as missing data
   atdMnl DateTime?
   eta    DateTime?

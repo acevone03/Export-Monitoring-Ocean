@@ -31,6 +31,7 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
         csUsers={csUsers}
         destinations={destinations}
         initial={toFormValues(s)}
+        hblNo={s.hblNo}
       />
     </div>
   );

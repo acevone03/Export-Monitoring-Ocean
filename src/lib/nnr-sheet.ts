@@ -53,7 +53,7 @@ const plan = (s: Shipment) => (s.containerPlan as Array<{ size: string; qty: num
 export function containerText(s: Shipment, size: "40" | "20"): string {
   if (s.cargoType !== "FCL") return "";
   return plan(s)
-    .filter((c) => (size === "20" ? c.size === "20" : c.size !== "20"))
+    .filter((c) => (size === "20" ? c.size.startsWith("20") : !c.size.startsWith("20"))) // 20RF reefers go in the 20FT column
     .map((c) => `${c.qty}X${c.size}`)
     .join(" & ");
 }

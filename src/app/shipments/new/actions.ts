@@ -8,6 +8,7 @@ import { parseShipmentForm } from "@/lib/shipment-input";
 import { createShipment, DomainError } from "@/lib/shipments";
 import type { ShipmentFormState } from "@/components/ShipmentForm";
 import { formValuesOf } from "../data";
+import { sendPickupInstruction } from "@/lib/pickup-instruction";
 
 export async function createShipmentAction(_prev: ShipmentFormState, form: FormData): Promise<ShipmentFormState> {
   const user = await requireUser(["CS", "SUPERVISOR"]);
@@ -20,5 +21,7 @@ export async function createShipmentAction(_prev: ShipmentFormState, form: FormD
     if (e instanceof DomainError) return { error: e.message, values: formValuesOf(form) };
     throw e;
   }
-  redirect(`/shipments/${id}?created=1`);
+  // Shipment is saved either way; the shipment page shows whether the instruction went out.
+  const pi = await sendPickupInstruction(prisma, id, user.id, await now());
+  redirect(`/shipments/${id}?created=1&pi=${pi.status}`);
 }

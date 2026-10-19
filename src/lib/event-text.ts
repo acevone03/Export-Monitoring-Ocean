@@ -1,5 +1,6 @@
 import type { MilestoneEvent } from "@prisma/client";
 import { formatDateTime } from "./time";
+import { containerPlanText } from "./containers";
 
 // Human-readable line for the shipment timeline.
 const FIELD_LABEL: Record<string, string> = {
@@ -10,6 +11,9 @@ const FIELD_LABEL: Record<string, string> = {
   carrierBookingRef: "Booking no.", carrierRemarks: "Remarks", assignedCsId: "Assigned CS",
   arrastreCutoffAt: "Arrastre cut-off", podCode: "HBL destination code", declarationBy: "Declaration c/o",
   declarationForwarder: "Declaration via forwarder", partOfHblNo: "Part of HBL",
+  positioningAt: "Positioning", containerYard: "Container yard", portOfLoading: "Port of loading", cyCutoffAt: "Cut-off",
+  consolidator: "Consol", grossWeightKg: "GW (kg)", cbm: "CBM", cargoDescription: "Description",
+  cargoDimensions: "Cargo dimension", deliveryWarehouse: "Delivery warehouse", pickupRemarks: "Pick-up remarks",
 };
 
 const when = (iso: unknown) => (typeof iso === "string" && /^\d{4}-\d{2}-\d{2}T/.test(iso) ? formatDateTime(new Date(iso)) : String(iso ?? "—"));
@@ -19,7 +23,7 @@ const show = (v: unknown) => {
   try {
     const parsed = JSON.parse(s);
     if (typeof parsed === "string") return when(parsed);
-    if (Array.isArray(parsed)) return parsed.map((c) => `${c.qty}×${c.size}`).join(", ");
+    if (Array.isArray(parsed)) return containerPlanText(parsed, ", ");
   } catch {}
   return when(s);
 };
@@ -60,6 +64,8 @@ export function describeEvent(e: Pick<MilestoneEvent, "type" | "value">): string
     case "HBL_EDITED": return `HBL No. changed ${v.from} → ${v.to}`;
     case "REVERTED": return `Reverted: ${REVERT_LABEL[v?.kind] ?? v?.kind} (was ${when(v?.previous)})`;
     case "IMPORTED": return `Imported from the old spreadsheet (row ${v?.row})${v?.legacyJobNo ? `, old booking no. ${v.legacyJobNo}` : ""}`;
+    case "PICKUP_INSTRUCTION_SENT": return `Pick-up instruction emailed to transport (${(v?.to ?? []).join(", ")})`;
+    case "PICKUP_INSTRUCTION_FAILED": return `Pick-up instruction NOT sent to ${(v?.to ?? []).join(", ")}: ${v?.error ?? "mail error"}`;
     case "NOTE": return v && typeof v === "object" && v.photo ? "Photo from field" : "Note";
     case "FIELD_CHANGED":
       return "Edited: " + Object.entries(v as Record<string, { from: unknown; to: unknown }>)

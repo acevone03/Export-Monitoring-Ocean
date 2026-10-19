@@ -21,11 +21,13 @@ export default async function NewShipmentPage() {
         destinations={destinations}
         initial={{
           shipperId: "", consigneeName: "", pickupAddress: "", destinationPort: "", pod: "", cargoType: "FCL",
-          containerPlan: [{ size: "40HC", qty: 1 }], lclQty: "", lclUnit: "",
+          containerPlan: [], lclQty: "", lclUnit: "",
           requestedPickupAt: "", fsiCutoffAt: "", preadviseCutoffAt: "", etdMnl: "", eta: "",
           arrastreResponsibility: "NNR", carrierName: "", carrierBookingRef: "", carrierRemarks: "",
           assignedCsId: user.role === "CS" ? user.id : "",
           arrastreCutoffAt: "", podCode: "", declarationBy: "NNR", declarationForwarder: "", partOfHblNo: "",
+          positioningAt: "", containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
+          cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
         }}
       />
     </div>

@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { parseManilaInput } from "./time";
 import { podCodeFor, POD_CODE_RE } from "./pod-codes";
+import { CONTAINER_SIZES, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
 
 // Validation for the shipment form (create and edit). Every API boundary that
 // writes shipment fields goes through ShipmentInputSchema.
 
-export const CONTAINER_SIZES = ["20", "40", "40HC"] as const;
-export type ContainerSize = (typeof CONTAINER_SIZES)[number];
-export type ContainerPlan = Array<{ size: ContainerSize; qty: number }>;
+export { CONTAINER_SIZES, type ContainerSize, type ContainerPlan } from "./containers";
 
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).transform((v) => v || null);
@@ -22,6 +21,24 @@ export const manilaDateTime = z.string().trim().transform((v, ctx) => {
   }
   return d;
 });
+
+// Pick-up instruction fields are optional keys so older callers (the spreadsheet import) still validate.
+const instrText = (max: number) => z.string().trim().max(max, `Keep it under ${max} characters`).optional().transform((v) => v || null);
+const instrDateTime = z.string().optional().transform((v) => v ?? "").pipe(manilaDateTime);
+/** <input type="date"> value (YYYY-MM-DD) as Manila midnight. Empty -> null. */
+const instrDate = z.string().trim().optional().transform((v, ctx) => {
+  if (!v) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(v) ? parseManilaInput(`${v}T00:00`) : null;
+  if (!d) {
+    ctx.addIssue({ code: "custom", message: "Invalid date" });
+    return z.NEVER;
+  }
+  return d;
+});
+const instrNumber = (label: string, max: number) =>
+  z.string().trim().optional()
+    .transform((v) => (v ? Number(v.replace(/,/g, "")) : null))
+    .pipe(z.number(`${label} must be a number`).min(0, `${label} cannot be negative`).max(max).nullable());
 
 const ContainerPlanSchema = z.array(
   z.object({
@@ -76,6 +93,20 @@ export const ShipmentInputSchema = z
     declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
     declarationForwarder: optText(100),
     partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
+    // Pick-up instruction: FCL
+    positioningAt: instrDateTime,
+    containerYard: instrText(200),
+    portOfLoading: z.string().optional().transform((v) => v || null).pipe(z.enum(PORTS_OF_LOADING, "Pick a port of loading from the list").nullable()),
+    cyCutoffAt: instrDate,
+    // Pick-up instruction: LCL
+    consolidator: instrText(100),
+    grossWeightKg: instrNumber("Gross weight", 1_000_000),
+    cbm: instrNumber("CBM", 10_000),
+    cargoDescription: instrText(500),
+    cargoDimensions: instrText(500),
+    deliveryWarehouse: instrText(200),
+    // Both
+    pickupRemarks: instrText(2000),
   })
   .superRefine((v, ctx) => {
     if (v.cargoType === "FCL") {
@@ -102,8 +133,8 @@ export const ShipmentInputSchema = z
   .transform((v) => {
     const podCode = (v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort))!;
     return v.cargoType === "FCL"
-      ? { ...v, podCode, lclQty: null, lclUnit: null }
-      : { ...v, podCode, containerPlan: [] as ContainerPlan };
+      ? { ...v, podCode, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null }
+      : { ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null };
   });
 
 export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
@@ -133,6 +164,17 @@ export const SHIPMENT_FORM_KEYS = [
   "declarationBy",
   "declarationForwarder",
   "partOfHblNo",
+  "positioningAt",
+  "containerYard",
+  "portOfLoading",
+  "cyCutoffAt",
+  "consolidator",
+  "grossWeightKg",
+  "cbm",
+  "cargoDescription",
+  "cargoDimensions",
+  "deliveryWarehouse",
+  "pickupRemarks",
 ] as const;
 
 export type FieldErrors = Partial<Record<string, string>>;

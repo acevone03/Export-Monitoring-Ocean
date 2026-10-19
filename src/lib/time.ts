@@ -52,3 +52,17 @@ export function toManilaInput(d: Date | null | undefined): string {
 
 export const HOUR = 60 * 60 * 1000;
 export const DAY = 24 * HOUR;
+
+/** Pick-up instruction date: 13/NOV/2026 */
+export function formatInstructionDate(d: Date | null | undefined): string {
+  if (!d) return "";
+  const p = manilaParts(d);
+  return `${pad(p.day)}/${MONTHS[p.month - 1].toUpperCase()}/${p.year}`;
+}
+
+/** Pick-up instruction date and time: 13/NOV/2026 13:00H */
+export function formatInstructionDateTime(d: Date | null | undefined): string {
+  if (!d) return "";
+  const p = manilaParts(d);
+  return `${formatInstructionDate(d)} ${pad(p.hour)}:${pad(p.minute)}H`;
+}
