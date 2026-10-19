@@ -133,6 +133,7 @@ describe("transport emails", () => {
     expect(evs.map((e) => JSON.parse(e.value!).revised).sort()).toEqual([false, true]);
     const full = await prisma.shipment.findUniqueOrThrow({ where: { id: s.id }, include: { shipper: true } });
     const mail = buildInstructionMail(full, { revised: true, previousSentAt: fromManila(2026, 10, 19, 9, 0) });
+    expect(mail.subject).toMatch(/^REVISED ATW for /);
     expect(mail.text).toContain("REVISED PICK-UP INSTRUCTION (FCL)");
     expect(mail.text).toContain("19/OCT/2026 09:00H");
   });

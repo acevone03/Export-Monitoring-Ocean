@@ -76,16 +76,19 @@ const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const sizeText = (s: Shipment) =>
   s.cargoType === "FCL" ? containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null) : `LCL ${qtyText(s)}`.trim();
 
-/** "ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905" — blanks are left out. */
-export function instructionSubject(s: ShipmentWithShipper): string {
+/**
+ * "ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905" — blanks are left out.
+ * A resent instruction starts with "REVISED " so transport can spot it in the inbox.
+ */
+export function instructionSubject(s: ShipmentWithShipper, revised = false): string {
   const parts = [s.shipper.name, s.carrierBookingRef, sizeText(s), s.hblNo ?? s.jobNo].map((x) => x?.trim()).filter(Boolean);
-  return `ATW for ${parts.join(" / ")}`;
+  return `${revised ? "REVISED " : ""}ATW for ${parts.join(" / ")}`;
 }
 
 export type MailOptions = { revised?: boolean; previousSentAt?: Date | null };
 
 export function buildInstructionMail(s: ShipmentWithShipper, opts: MailOptions = {}): { subject: string; text: string; html: string } {
-  const subject = instructionSubject(s);
+  const subject = instructionSubject(s, opts.revised);
   const title = `${opts.revised ? "REVISED " : ""}PICK-UP INSTRUCTION (${s.cargoType})`;
   const revisedNote = opts.revised
     ? `This replaces the instruction sent${opts.previousSentAt ? ` on ${formatInstructionDateTime(opts.previousSentAt)}` : " earlier"}. Please follow this one.`

@@ -453,6 +453,6 @@ real data are **not** in the repository; tests use invented rows under the real 
    `ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905`. Blank parts are left out; LCL shows `LCL 6 PALLETS`.
    **Revised instructions**: when an edit (or an HBL change) touches anything printed on the instruction and the cargo
    has not been picked up, the instruction is emailed again with "REVISED" and the time of the previous one at the
-   top of the body. The subject stays in the ATW format. Edits after pick-up do not resend.
+   top of the body, and the subject starts with `REVISED ATW for …` (NNR, 19-Oct-2026). Edits after pick-up do not resend.
 7. **Required for FCL** (NNR, 19-Oct-2026): positioning date/time and port of loading, on new shipments, email-intake
    confirmation, and edits before pick-up. Not required on the spreadsheet import or after pick-up.
