@@ -486,3 +486,15 @@ real data are **not** in the repository; tests use invented rows under the real 
    and today)", and E-track joins the pending list once the cargo is picked up (it has no deadline of its own).
    Monthly: counts of arrastre and E-track payments made in the month, departures in the month without E-track, and a
    list of the payments (also a "Payments" sheet in the Excel). The Excel raw sheet has an E-TRACK PAID column.
+
+## Ocean Export Booking Sheet print (19-Oct-2026)
+
+From NNR's "BOOKING SHEET 2024" Excel form. Every shipment has a **🖨️ Booking sheet** button (also offered right
+after creating a shipment) that opens `/shipments/{id}/booking-sheet`: the form laid out like the original on one US Letter
+page, filled from the system. "Print / Save as PDF" opens the browser's print dialog; choosing "Save as PDF" gives the PDF.
+Filled: office, date, PIC (assigned CS), load, HBL (marked DIRECT), booking no., place of loading (MNL + port), port of
+discharge, book date, pick-up, final destination, carrier cut-off (FCL), shipper with address and contact, carrier /
+consolidator, consignee, ETD, onboard (ATD), ETA, transit time, routing, consol warehouse (LCL), commodity, NNR pick-up
+tick, cargo dimension, number of cases/containers, gross weight, CBM, handling (positioning + remarks), billing invoice no.
+Not tracked by the system, so left blank to write in: vessel/voyage, notify, C/vessel, incoterms, tariffs, prepaid/collect,
+PO/SO, IDS, container/seal numbers, VGM, COO, and the transaction and operations checklists.

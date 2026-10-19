@@ -76,7 +76,8 @@ export default async function ShipmentPage({
     <div className="space-y-6">
       {created && (
         <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
-          Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.
+          Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.{" "}
+          <a href={`/shipments/${s.id}/booking-sheet`} target="_blank" rel="noopener" className="font-medium underline">Print booking sheet (PDF)</a>.
           {pi === "sent" && <> Pick-up instruction emailed to transport ({transportEmails.join(", ")}).</>}
         </div>
       )}
@@ -113,6 +114,7 @@ export default async function ShipmentPage({
         </div>
         <div className="ml-auto flex gap-2">
           <Link href="/" className="btn-secondary">Back to board</Link>
+          <a href={`/shipments/${s.id}/booking-sheet`} target="_blank" rel="noopener" className="btn-secondary">🖨️ Booking sheet</a>
           {open && <Link href={`/shipments/${s.id}/edit`} className="btn">Edit details</Link>}
         </div>
       </header>
