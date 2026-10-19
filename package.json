@@ -14,7 +14,8 @@
     "setup": "prisma migrate deploy && prisma generate && tsx --env-file=.env prisma/seed.ts",
     "scheduler": "tsx --env-file=.env scripts/scheduler.ts",
     "tick": "tsx --env-file=.env scripts/scheduler.ts --once",
-    "docs": "tsx scripts/gen-docs.ts"
+    "docs": "tsx scripts/gen-docs.ts",
+    "clear-data": "tsx --env-file=.env scripts/clear-data.ts"
   },
   "prisma": {
     "seed": "tsx --env-file=.env prisma/seed.ts"

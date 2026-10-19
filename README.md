@@ -20,6 +20,9 @@ Demo logins (password `nnr-demo-2026`): `sup1@nnr.test`, `sup2@nnr.test` (superv
 
 To start over: delete `prisma/dev.db` and run `npm run setup` again.
 
+To remove the demo (or any) shipments and shippers but keep users and settings: stop the app and run
+`npm run clear-data` (type DELETE to confirm). A backup is saved first as `prisma/backup-YYYYMMDD-HHMM.db`.
+
 ### Demo: watch a deadline go amber, then red
 
 1. Log in as `sup1@nnr.test`, create a shipment with requested pick-up about 5 hours from now.
