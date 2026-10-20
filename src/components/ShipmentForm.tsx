@@ -3,17 +3,29 @@
 import { useActionState, useRef, useState } from "react";
 import type { FieldErrors } from "@/lib/shipment-input";
 import { podCodeFor } from "@/lib/pod-codes";
+import { CONTAINER_SIZES, CONTAINER_LABEL, FREIGHT_TERMS, INCOTERMS, PORTS_OF_LOADING, type ContainerSize } from "@/lib/containers";
+import { formatInstructionDate, formatInstructionDateTime, parseManilaInput } from "@/lib/time";
 
 // `values` echoes the submitted fields on error: React 19 resets the form after an
 // action, and uncontrolled fields reset to their defaultValue, so we feed it back.
 export type ShipmentFormState = { error?: string; fieldErrors?: FieldErrors; values?: Record<string, string> };
-export type ShipperOption = { id: string; name: string; defaultArrastre: "NNR" | "SHIPPER" };
+export type ShipperOption = {
+  id: string;
+  code: string;
+  name: string;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  defaultPickupAddress: string | null;
+  defaultArrastre: "NNR" | "SHIPPER";
+};
 export type CsOption = { id: string; name: string };
-type Container = { size: "20" | "40" | "40HC"; qty: number };
+type Container = { size: ContainerSize; qty: number };
 
 export type ShipmentFormValues = {
   shipperId: string;
   consigneeName: string;
+  pickupAddress: string;
   destinationPort: string;
   pod: string;
   cargoType: "FCL" | "LCL";
@@ -32,9 +44,33 @@ export type ShipmentFormValues = {
   assignedCsId: string;
   arrastreCutoffAt: string;
   podCode: string;
+  hblType: "NNR" | "DIRECT";
   declarationBy: "NNR" | "SHIPPER";
   declarationForwarder: string;
   partOfHblNo: string;
+  // Pick-up instruction (sent to transport unless the consignee delivers).
+  cargoArrangement: "NNR_PICKUP" | "CONSIGNEE_DELIVERY";
+  hasCoo: boolean; // Certificate of Origin
+  // FCL:
+  positioningAt: string; // datetime-local, Manila (first box)
+  morePositioningAt: string[]; // further boxes, datetime-local
+  containerYard: string;
+  portOfLoading: string;
+  cyCutoffAt: string; // date (YYYY-MM-DD), never the same day as a positioning date
+  grossWeightKg: string; // FCL and LCL
+  // LCL:
+  consolidator: string;
+  cbm: string;
+  cargoDescription: string;
+  cargoDimensions: string;
+  deliveryWarehouse: string;
+  // Both:
+  pickupRemarks: string;
+  // Booking sheet
+  vesselName: string;
+  voyageNo: string;
+  freightTerms: "" | "PREPAID" | "COLLECT";
+  incoterm: string;
 };
 
 type Props = {
@@ -49,9 +85,15 @@ type Props = {
   flags?: Partial<Record<keyof ShipmentFormValues, string>>;
   /** Shipper text to show when no shipper matched (e.g. the name as written in the email). */
   initialShipperName?: string;
+  /** HBL No. of an existing shipment (edit). New shipments get theirs on save. */
+  hblNo?: string | null;
+  /** Shipping lines with tracking links, suggested in the carrier field. */
+  carrierNames?: string[];
+  /** Positioning and port of loading must be filled for FCL (new shipments, and edits before pick-up). */
+  requireInstruction?: boolean;
 };
 
-export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName }: Props) {
+export function ShipmentForm({ action, initial, shippers, csUsers, destinations, submitLabel, isNew, flags = {}, initialShipperName, hblNo, requireInstruction = isNew, carrierNames = [] }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const err = state.fieldErrors ?? {};
@@ -59,6 +101,12 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
 
   const [shipperName, setShipperName] = useState(shippers.find((s) => s.id === initial.shipperId)?.name ?? initialShipperName ?? "");
   const [shipperId, setShipperId] = useState(initial.shipperId);
+  const shipper = shippers.find((s) => s.id === shipperId) ?? null;
+  // Pick-up address follows the chosen shipper until CS types their own.
+  const [pickupAddress, setPickupAddress] = useState(
+    initial.pickupAddress || (isNew ? shippers.find((s) => s.id === initial.shipperId)?.defaultPickupAddress ?? "" : ""),
+  );
+  const [addressTouched, setAddressTouched] = useState(!isNew);
   const [arrastre, setArrastre] = useState(initial.arrastreResponsibility);
   // HBL destination code follows the destination/POD until CS types their own.
   const [podCode, setPodCode] = useState(initial.podCode || podCodeFor(initial.pod) || podCodeFor(initial.destinationPort) || "");
@@ -71,20 +119,36 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
   };
   const [arrastreTouched, setArrastreTouched] = useState(!isNew);
   const [cargoType, setCargoType] = useState(initial.cargoType);
-  const [containers, setContainers] = useState<Container[]>(
-    initial.containerPlan.length ? initial.containerPlan : [{ size: "40HC", qty: 1 }],
-  );
+  // Container size ticks: qty per size, 0 = not ticked.
+  const [qtyBySize, setQtyBySize] = useState<Record<ContainerSize, number>>(() => {
+    const q = Object.fromEntries(CONTAINER_SIZES.map((z) => [z, 0])) as Record<ContainerSize, number>;
+    for (const c of initial.containerPlan) if (c.size in q) q[c.size] += c.qty;
+    return q;
+  });
+  const containers: Container[] = CONTAINER_SIZES.filter((z) => qtyBySize[z] > 0).map((z) => ({ size: z, qty: qtyBySize[z] }));
+  const [hblType, setHblType] = useState<"NNR" | "DIRECT">((v("hblType") as "NNR" | "DIRECT") || "NNR");
+  const [booking, setBooking] = useState(v("carrierBookingRef"));
+  const [arrangement, setArrangement] = useState(initial.cargoArrangement);
+  const [hasCoo, setHasCoo] = useState(initial.hasCoo);
+  // Positioning boxes: the first is required for FCL, "Add positioning date" adds more.
+  const [positions, setPositions] = useState<string[]>(() => [initial.positioningAt, ...initial.morePositioningAt]);
+  const [cutoff, setCutoff] = useState(v("cyCutoffAt"));
+  const setPosition = (i: number, value: string) => setPositions(positions.map((p, j) => (j === i ? value : p)));
+  const filledPositions = positions.filter(Boolean);
+  // Cut-off and positioning must be on different days; datetime-local values start with the Manila date.
+  const cutoffClash = cutoff ? filledPositions.find((p) => p.slice(0, 10) === cutoff) : undefined;
 
-  function pickShipper(name: string) {
-    setShipperName(name);
-    const match = shippers.find((s) => s.name.toLowerCase() === name.trim().toLowerCase());
+  function pickShipper(typed: string) {
+    const t = typed.trim().toLowerCase();
+    // Match the name, or the code on its own ("shp-0003", "SHP-0003").
+    const match = t ? shippers.find((s) => s.name.toLowerCase() === t || s.code.toLowerCase() === t) ?? null : null;
+    setShipperName(match && match.code.toLowerCase() === t ? match.name : typed);
     setShipperId(match?.id ?? "");
-    // Default arrastre from the shipper master, unless CS already chose one.
+    // Default arrastre and pick-up address from the shipper master, unless CS already changed them.
     if (match && !arrastreTouched) setArrastre(match.defaultArrastre);
+    if (!addressTouched) setPickupAddress(match?.defaultPickupAddress ?? "");
   }
 
-  const usedSizes = new Set(containers.map((c) => c.size));
-  const nextFreeSize = (["40HC", "40", "20"] as const).find((s) => !usedSizes.has(s));
 
   return (
     <form
@@ -97,6 +161,7 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
     >
       <input type="hidden" name="shipperId" value={shipperId} />
       <input type="hidden" name="containerPlan" value={cargoType === "FCL" ? JSON.stringify(containers) : "[]"} />
+      <input type="hidden" name="morePositioningAt" value={cargoType === "FCL" ? JSON.stringify(positions.slice(1).filter(Boolean)) : "[]"} />
 
       <Section title="Booking">
         <Field label="Shipper" error={err.shipperId} flag={flags.shipperId} span={2}>
@@ -105,16 +170,49 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             list="shipper-list"
             value={shipperName}
             onChange={(e) => pickShipper(e.target.value)}
-            placeholder="Start typing a shipper name"
+            placeholder="Type a shipper name or code (SHP-0001)"
             autoFocus={isNew}
             autoComplete="off"
             required
           />
           <datalist id="shipper-list">
-            {shippers.map((s) => <option key={s.id} value={s.name} />)}
+            {shippers.map((s) => <option key={s.id} value={s.name} label={s.code} />)}
           </datalist>
+          {shipper && (
+            <p className="mt-1 text-xs text-slate-600">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800">{shipper.code}</span>
+              {[shipper.contactPerson, shipper.phone, shipper.email].filter(Boolean).map((x) => ` · ${x}`).join("")}
+            </p>
+          )}
           {shipperName && !shipperId && (
-            <p className="mt-1 text-xs text-amber-700">Not in the shipper list. Pick an existing shipper or add it under Shippers.</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Not in the shipper list. Type a name or code (e.g. SHP-0001), or <a href="/shippers" target="_blank" className="underline">add it under Shippers</a>.
+            </p>
+          )}
+        </Field>
+        <Field label="Pick-up address" error={err.pickupAddress} span={2}>
+          <input
+            className="input"
+            name="pickupAddress"
+            value={pickupAddress}
+            maxLength={300}
+            placeholder={shipper ? "No default address saved for this shipper" : "Fills in when you pick the shipper"}
+            onChange={(e) => {
+              setPickupAddress(e.target.value);
+              setAddressTouched(true);
+            }}
+          />
+          {shipper?.defaultPickupAddress && pickupAddress !== shipper.defaultPickupAddress && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => {
+                setPickupAddress(shipper.defaultPickupAddress ?? "");
+                setAddressTouched(false);
+              }}
+            >
+              Use the shipper&apos;s address
+            </button>
           )}
         </Field>
         <Field label="Consignee (optional)" error={err.consigneeName} span={2}>
@@ -126,20 +224,22 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Port of discharge" error={err.pod} flag={flags.pod} span={2}>
           <input className="input" name="pod" list="dest-list" defaultValue={v("pod")} placeholder="e.g. USLGB Long Beach" required autoComplete="off" onChange={(e) => suggestCode(e.currentTarget.form)} />
         </Field>
-        <Field label="HBL destination code" error={err.podCode} flag={flags.podCode}>
-          <input
-            className="input font-mono uppercase"
-            name="podCode"
-            value={podCode}
-            maxLength={3}
-            placeholder="e.g. TYO"
-            onChange={(e) => {
-              setPodCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""));
-              setPodTouched(true);
-            }}
-          />
-          <p className="mt-1 text-xs text-slate-500">{isNew ? "Used in the HBL No. (NNRMNL" + (podCode || "___") + "F…)." : "Changing it does not change the issued HBL No."}</p>
-        </Field>
+        {hblType === "NNR" && (
+          <Field label="HBL destination code" error={err.podCode} flag={flags.podCode}>
+            <input
+              className="input font-mono uppercase"
+              name="podCode"
+              value={podCode}
+              maxLength={3}
+              placeholder="e.g. TYO"
+              onChange={(e) => {
+                setPodCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""));
+                setPodTouched(true);
+              }}
+            />
+            <p className="mt-1 text-xs text-slate-500">{isNew ? "Used in the HBL No. (NNRMNL" + (podCode || "___") + "F…)." : "Changing it does not change the issued HBL No."}</p>
+          </Field>
+        )}
         <Field label="Part of HBL (split shipment, optional)" error={err.partOfHblNo}>
           <input className="input font-mono uppercase" name="partOfHblNo" defaultValue={v("partOfHblNo")} placeholder="e.g. NNRMNLNGOF8665" />
         </Field>
@@ -148,65 +248,204 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         </datalist>
       </Section>
 
-      <Section title="Cargo">
+      <Section title={arrangement === "CONSIGNEE_DELIVERY" ? "Cargo and delivery instruction (consignee delivers, not sent to transport)" : "Cargo and pick-up instruction (sent to transport)"}>
+        <Field label="Cargo arrangement" error={err.cargoArrangement} span={3}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="cargoArrangement" value="NNR_PICKUP" checked={arrangement === "NNR_PICKUP"} onChange={() => setArrangement("NNR_PICKUP")} /> Pick-up by NNR
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="cargoArrangement" value="CONSIGNEE_DELIVERY" checked={arrangement === "CONSIGNEE_DELIVERY"} onChange={() => setArrangement("CONSIGNEE_DELIVERY")} /> Delivered by consignee
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {arrangement === "CONSIGNEE_DELIVERY"
+              ? "The consignee brings the cargo, so no email goes to the transport team. The instruction still shows on the shipment."
+              : "The pick-up instruction is emailed to the transport team when you save."}
+          </p>
+        </Field>
         <Field label="Cargo type" error={err.cargoType} flag={flags.cargoType}>
           <select className="input" name="cargoType" value={cargoType} onChange={(e) => setCargoType(e.target.value as "FCL" | "LCL")}>
             <option value="FCL">FCL</option>
             <option value="LCL">LCL</option>
           </select>
         </Field>
+        <Field label={hblType === "DIRECT" ? "Booking number * (becomes the HBL)" : "Booking number"} error={err.carrierBookingRef}>
+          <input
+            className="input"
+            name="carrierBookingRef"
+            defaultValue={v("carrierBookingRef")}
+            required={hblType === "DIRECT"}
+            onChange={(e) => setBooking(e.target.value)}
+          />
+        </Field>
+        <Field label="HBL" error={err.hblType} span={2}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="hblType" value="NNR" checked={hblType === "NNR"} onChange={() => setHblType("NNR")} /> NNR Consolidation
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="hblType" value="DIRECT" checked={hblType === "DIRECT"} onChange={() => setHblType("DIRECT")} /> Direct
+            </label>
+          </div>
+          <p className="input mt-1 bg-slate-50 font-mono text-slate-600">
+            {hblType === "DIRECT"
+              ? booking.trim()
+                ? booking.trim().toUpperCase()
+                : "= booking number"
+              : initial.hblType === "NNR" && hblNo
+                ? hblNo
+                : `New NNR number on save (NNRMNL${podCode || "___"}${cargoType === "FCL" ? "F" : "L"}…)`}
+          </p>
+        </Field>
+
+        <Field label="Commodity description" error={err.cargoDescription} span={2}>
+          <input className="input" name="cargoDescription" defaultValue={v("cargoDescription")} maxLength={500} placeholder="e.g. Desiccated coconut, 1,200 bags" />
+        </Field>
+        <Field label="Freight" error={err.freightTerms}>
+          <div className="flex h-[38px] items-center gap-4 text-sm">
+            {FREIGHT_TERMS.map((t) => (
+              <label key={t} className="flex items-center gap-1.5">
+                <input type="radio" name="freightTerms" value={t} defaultChecked={v("freightTerms") === t} /> {t === "PREPAID" ? "Prepaid" : "Collect"}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Incoterms" error={err.incoterm}>
+          <select className="input" name="incoterm" defaultValue={v("incoterm")}>
+            <option value="">Choose…</option>
+            {INCOTERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Field>
+
         {cargoType === "FCL" ? (
-          <Field label="Containers" error={err.containerPlan} flag={flags.containerPlan} span={3}>
-            <div className="space-y-2">
-              {containers.map((c, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    aria-label="Quantity"
-                    className="input w-20"
-                    value={c.qty}
-                    onChange={(e) => setContainers(containers.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))}
-                  />
-                  <span className="text-slate-500">×</span>
-                  <select
-                    aria-label="Container size"
-                    className="input w-28"
-                    value={c.size}
-                    onChange={(e) => setContainers(containers.map((x, j) => (j === i ? { ...x, size: e.target.value as Container["size"] } : x)))}
-                  >
-                    <option value="20">20&apos;</option>
-                    <option value="40">40&apos;</option>
-                    <option value="40HC">40&apos; HC</option>
-                  </select>
-                  {containers.length > 1 && (
-                    <button type="button" className="text-sm text-slate-500 hover:text-red-700" onClick={() => setContainers(containers.filter((_, j) => j !== i))}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-              {nextFreeSize && (
-                <button type="button" className="text-sm text-blue-700 hover:underline" onClick={() => setContainers([...containers, { size: nextFreeSize, qty: 1 }])}>
-                  + Add another size
-                </button>
+          <>
+            <Field label={`Positioning date and time${requireInstruction ? " *" : ""}`} error={err.positioningAt ?? err.morePositioningAt} span={2}>
+              <div className="space-y-2">
+                {positions.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-right text-xs tabular-nums text-slate-500">{i + 1}</span>
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      name={i === 0 ? "positioningAt" : undefined}
+                      required={i === 0 && requireInstruction}
+                      value={p}
+                      aria-label={`Positioning date and time ${i + 1}`}
+                      onChange={(e) => setPosition(i, e.target.value)}
+                    />
+                    {positions.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn-secondary shrink-0 px-2.5 py-1"
+                        aria-label={`Remove positioning date ${i + 1}`}
+                        onClick={() => setPositions(positions.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="mt-2 text-sm font-medium text-blue-700 hover:underline" onClick={() => setPositions([...positions, ""])}>
+                + Add positioning date
+              </button>
+              {filledPositions.length > 0 && (
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {[...filledPositions].sort().map((p) => formatInstructionDateTime(parseManilaInput(p))).join(" · ")}
+                </p>
               )}
-            </div>
-          </Field>
+            </Field>
+            <Field label="Container yard" error={err.containerYard}>
+              <input className="input" name="containerYard" defaultValue={v("containerYard")} placeholder="Where to get the empty" />
+            </Field>
+            <Field label={`Port of loading${requireInstruction ? " *" : ""}`} error={err.portOfLoading}>
+              <select className="input" name="portOfLoading" required={requireInstruction} defaultValue={v("portOfLoading")}>
+                <option value="">Choose…</option>
+                {PORTS_OF_LOADING.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Container size (tick and enter how many)" error={err.containerPlan} flag={flags.containerPlan} span={3}>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {CONTAINER_SIZES.map((z) => {
+                  const on = qtyBySize[z] > 0;
+                  return (
+                    <div key={z} className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${on ? "border-blue-300 bg-blue-50" : "border-slate-200"}`}>
+                      <label className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(e) => setQtyBySize({ ...qtyBySize, [z]: e.target.checked ? 1 : 0 })}
+                        />
+                        {CONTAINER_LABEL[z]}
+                      </label>
+                      <span className="text-slate-400">×</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        aria-label={`How many ${CONTAINER_LABEL[z]}`}
+                        className="input w-16 py-1"
+                        disabled={!on}
+                        value={on ? qtyBySize[z] : ""}
+                        onChange={(e) => setQtyBySize({ ...qtyBySize, [z]: Math.max(1, Math.min(99, Number(e.target.value) || 1)) })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {containers.length > 0 && (
+                <p className="mt-1 text-xs text-slate-600">{containers.map((c) => `${c.qty}x${CONTAINER_LABEL[c.size]}`).join(" + ")}</p>
+              )}
+            </Field>
+            <Field label={`Cut-off date${requireInstruction ? " *" : ""}`} error={err.cyCutoffAt}>
+              <input className="input" type="date" name="cyCutoffAt" required={requireInstruction} value={cutoff} onChange={(e) => setCutoff(e.target.value)} />
+              {cutoffClash ? (
+                <p className="mt-1 text-xs text-red-700">Same day as positioning {formatInstructionDate(parseManilaInput(cutoffClash))}. Pick a different day.</p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">Must not be on a positioning date.</p>
+              )}
+            </Field>
+            <Field label="Gross weight (kg)" error={err.grossWeightKg}>
+              <input className="input" type="number" min={0} step="any" name="grossWeightKg" defaultValue={v("grossWeightKg")} placeholder="e.g. 18500" />
+            </Field>
+          </>
         ) : (
           <>
-            <Field label="LCL quantity" error={err.lclQty} flag={flags.lclQty}>
-              <input className="input" type="number" min={1} name="lclQty" defaultValue={v("lclQty")} />
+            <Field label="Consol" error={err.consolidator}>
+              <input className="input" name="consolidator" defaultValue={v("consolidator")} placeholder="Consolidator / co-loader" />
             </Field>
-            <Field label="Unit">
-              <select className="input" name="lclUnit" defaultValue={v("lclUnit") || "PALLET"}>
-                <option value="PALLET">Pallets</option>
-                <option value="BOX">Boxes</option>
-              </select>
+            <Field label="Quantity" error={err.lclQty} flag={flags.lclQty}>
+              <div className="flex gap-2">
+                <input className="input w-24" type="number" min={1} name="lclQty" defaultValue={v("lclQty")} aria-label="Quantity" />
+                <select className="input" name="lclUnit" defaultValue={v("lclUnit") || "PALLET"} aria-label="Unit">
+                  <option value="PALLET">Pallets</option>
+                  <option value="BOX">Boxes</option>
+                </select>
+              </div>
+            </Field>
+            <Field label="GW (kg)" error={err.grossWeightKg}>
+              <input className="input" type="number" min={0} step="any" name="grossWeightKg" defaultValue={v("grossWeightKg")} />
+            </Field>
+            <Field label="CBM" error={err.cbm}>
+              <input className="input" type="number" min={0} step="any" name="cbm" defaultValue={v("cbm")} />
+            </Field>
+            <Field label="Cargo dimension" error={err.cargoDimensions} span={2}>
+              <input className="input" name="cargoDimensions" defaultValue={v("cargoDimensions")} placeholder="e.g. 4 pallets @ 120 x 100 x 150 cm" />
+            </Field>
+            <Field label="Delivery warehouse" error={err.deliveryWarehouse} span={2}>
+              <input className="input" name="deliveryWarehouse" defaultValue={v("deliveryWarehouse")} placeholder="CFS / consol warehouse" />
             </Field>
           </>
         )}
+        <Field label="Certificate of Origin" error={err.hasCoo}>
+          <label className="flex h-[38px] items-center gap-2 text-sm">
+            <input type="checkbox" name="hasCoo" checked={hasCoo} onChange={(e) => setHasCoo(e.target.checked)} /> COO goes with this shipment
+          </label>
+        </Field>
+        <Field label="Remarks (for transport)" error={err.pickupRemarks} span={2}>
+          <textarea className="input" rows={2} name="pickupRemarks" defaultValue={v("pickupRemarks")} />
+        </Field>
       </Section>
 
       <Section title="Schedule and cut-offs (Manila time)">
@@ -222,20 +461,24 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         <Field label="Arrastre cut-off" error={err.arrastreCutoffAt}>
           <input className="input" type="datetime-local" name="arrastreCutoffAt" defaultValue={v("arrastreCutoffAt")} />
         </Field>
-        <Field label="ETD MNL" error={err.etdMnl}>
-          <input className="input" type="datetime-local" name="etdMnl" defaultValue={v("etdMnl")} />
+        <Field label="ETD MNL (date)" error={err.etdMnl}>
+          <input className="input" type="date" name="etdMnl" defaultValue={v("etdMnl").slice(0, 10)} />
         </Field>
-        <Field label="ETA" error={err.eta}>
-          <input className="input" type="datetime-local" name="eta" defaultValue={v("eta")} />
+        <Field label="ETA (date)" error={err.eta}>
+          <input className="input" type="date" name="eta" defaultValue={v("eta").slice(0, 10)} />
         </Field>
       </Section>
 
       <Section title="Carrier">
         <Field label="Shipping line / co-loader" error={err.carrierName}>
-          <input className="input" name="carrierName" defaultValue={v("carrierName")} />
+          <input className="input" name="carrierName" list="carrier-list" defaultValue={v("carrierName")} autoComplete="off" placeholder="e.g. Maersk" />
+          <datalist id="carrier-list">{carrierNames.map((n) => <option key={n} value={n} />)}</datalist>
         </Field>
-        <Field label="Booking no." error={err.carrierBookingRef}>
-          <input className="input" name="carrierBookingRef" defaultValue={v("carrierBookingRef")} />
+        <Field label="Vessel name" error={err.vesselName}>
+          <input className="input" name="vesselName" defaultValue={v("vesselName")} maxLength={100} placeholder="e.g. MAERSK KOWLOON" />
+        </Field>
+        <Field label="Voyage no." error={err.voyageNo}>
+          <input className="input" name="voyageNo" defaultValue={v("voyageNo")} maxLength={30} placeholder="e.g. 245S" />
         </Field>
         <Field label="Remarks" error={err.carrierRemarks} span={2}>
           <input className="input" name="carrierRemarks" defaultValue={v("carrierRemarks")} />

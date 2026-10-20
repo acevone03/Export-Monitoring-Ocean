@@ -53,7 +53,7 @@ const plan = (s: Shipment) => (s.containerPlan as Array<{ size: string; qty: num
 export function containerText(s: Shipment, size: "40" | "20"): string {
   if (s.cargoType !== "FCL") return "";
   return plan(s)
-    .filter((c) => (size === "20" ? c.size === "20" : c.size !== "20"))
+    .filter((c) => (size === "20" ? c.size.startsWith("20") : !c.size.startsWith("20"))) // 20RF reefers go in the 20FT column
     .map((c) => `${c.qty}X${c.size}`)
     .join(" & ");
 }
@@ -113,4 +113,5 @@ export const EXTRA_COLUMNS: Array<{ header: string; value: (s: SheetShipment) =>
   { header: "PRE-ADVISE SENT", value: (s) => s.preadviseSentAt, width: 14 },
   { header: "DECLARATION STATUS", value: (s) => s.exportDeclarationStatus, width: 14 },
   { header: "BOC UPLOAD DEADLINE", value: (s) => s.bocDeadlineAt, width: 14 },
+  { header: "E-TRACK PAID", value: (s) => s.etrackPaidAt, width: 14 },
 ];

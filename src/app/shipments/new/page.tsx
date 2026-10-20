@@ -5,12 +5,12 @@ import { createShipmentAction } from "./actions";
 
 export default async function NewShipmentPage() {
   const user = await requireUser(["CS", "SUPERVISOR"]);
-  const { shippers, csUsers, destinations } = await formOptions();
+  const { shippers, csUsers, destinations, carrierNames } = await formOptions();
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-semibold">New ocean export shipment</h1>
-        <p className="text-sm text-slate-600">Job No. and HBL No. are assigned automatically when you save.</p>
+        <p className="text-sm text-slate-600">Type the shipper name or code (e.g. SHP-0001): the pick-up address and contact fill in automatically. Job No. and HBL No. are assigned when you save.</p>
       </div>
       <ShipmentForm
         action={createShipmentAction}
@@ -19,13 +19,17 @@ export default async function NewShipmentPage() {
         shippers={shippers}
         csUsers={csUsers}
         destinations={destinations}
+        carrierNames={carrierNames}
         initial={{
-          shipperId: "", consigneeName: "", destinationPort: "", pod: "", cargoType: "FCL",
-          containerPlan: [{ size: "40HC", qty: 1 }], lclQty: "", lclUnit: "",
+          shipperId: "", consigneeName: "", pickupAddress: "", destinationPort: "", pod: "", cargoType: "FCL",
+          containerPlan: [], lclQty: "", lclUnit: "",
           requestedPickupAt: "", fsiCutoffAt: "", preadviseCutoffAt: "", etdMnl: "", eta: "",
           arrastreResponsibility: "NNR", carrierName: "", carrierBookingRef: "", carrierRemarks: "",
           assignedCsId: user.role === "CS" ? user.id : "",
-          arrastreCutoffAt: "", podCode: "", declarationBy: "NNR", declarationForwarder: "", partOfHblNo: "",
+          arrastreCutoffAt: "", podCode: "", hblType: "NNR", declarationBy: "NNR", declarationForwarder: "", partOfHblNo: "",
+          cargoArrangement: "NNR_PICKUP", hasCoo: false, positioningAt: "", morePositioningAt: [], containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
+          cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
+          vesselName: "", voyageNo: "", freightTerms: "", incoterm: "",
         }}
       />
     </div>

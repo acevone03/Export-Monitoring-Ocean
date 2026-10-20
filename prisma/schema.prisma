@@ -20,9 +20,23 @@ enum Role {
   CUSTOMER // reserved for the post-MVP customer portal; no UI grants it yet
 }
 
+// NNR: NNR's own house bill (NNRMNL…F/L number). DIRECT: carrier bill straight to the shipper; the
+// booking number is used as the HBL.
+enum HblType {
+  NNR
+  DIRECT
+}
+
 enum CargoType {
   FCL
   LCL
+}
+
+// Who brings the cargo: NNR's trucker picks it up (pick-up instruction emailed to transport), or the
+// consignee delivers it themselves (no email to transport).
+enum CargoArrangement {
+  NNR_PICKUP
+  CONSIGNEE_DELIVERY
 }
 
 enum LclUnit {
@@ -115,6 +129,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         Role
+  title        String?  // job title shown in the app, e.g. "CS Export Assistant"; access comes from role
   phone        String?
   viberId      String?
   telegramId   String?
@@ -148,6 +163,10 @@ model Session {
 
 model Shipper {
   id                      String                 @id @default(uuid())
+  // Permanent customer code, e.g. SHP-0007. Assigned on creation from the "SHIPPER" counter, never reused.
+  code                    String                 @unique
+  // Unique as typed; createShipper also rejects names that differ only in case, spacing,
+  // punctuation or Inc/Corp/Co (see src/lib/shippers.ts).
   name                    String                 @unique
   contactPerson           String?
   email                   String?
@@ -166,6 +185,7 @@ model Shipment {
   // Ocean export only (see DECISIONS.md). No mode field; numbering formats carry the "O".
   jobNo String  @unique
   hblNo String? @unique // assigned on confirmation, never reused
+  hblType HblType @default(NNR) // DIRECT: hblNo = carrierBookingRef
   // Destination code used in the HBL No. (e.g. TYO in NNRMNLTYOF9904).
   podCode String?
   // "PART OF 8665" in the sheet: the HBL No. this split shipment belongs with.
@@ -176,6 +196,8 @@ model Shipment {
   shipperId     String
   shipper       Shipper @relation(fields: [shipperId], references: [id])
   consigneeName String?
+  // Where the field team picks up. Filled from the shipper's default address on the form; editable per shipment.
+  pickupAddress String?
 
   destinationPort String
   pod             String
@@ -216,6 +238,37 @@ model Shipment {
 
   carrierName    String?
   carrierRemarks String?
+  vesselName     String?
+  voyageNo       String?
+  freightTerms   String? // PREPAID | COLLECT
+  incoterm       String? // Incoterms 2020 code, see INCOTERMS in src/lib/containers.ts
+
+  // Pick-up instruction sent to the transport (trucking) company. FCL and LCL use different fields;
+  // the form clears the ones that do not apply to the cargo type.
+  cargoArrangement  CargoArrangement @default(NNR_PICKUP)
+  // FCL: empty-container positioning, container yard, port of loading, cut-off (date only).
+  positioningAt     DateTime? // earliest positioning date and time
+  morePositioningAt Json?     // further positioning date-times (ISO strings, ascending), one per extra box on the form
+  containerYard     String?
+  portOfLoading     String?   // MICP/NORTH | SOUTH/ATI | PORT OF BATANGAS | SUBIC (see PORTS_OF_LOADING)
+  cyCutoffAt        DateTime? // date only, stored as Manila midnight; never the same day as a positioning date
+  // LCL: consolidator, volume, description, dimensions, warehouse to deliver to.
+  consolidator      String?
+  grossWeightKg     Float?    // FCL and LCL
+  hasCoo            Boolean   @default(false) // Certificate of Origin goes with the shipment (FCL and LCL)
+  cbm               Float?
+  cargoDescription  String?   // commodity description (FCL and LCL)
+  cargoDimensions   String?
+  deliveryWarehouse String?
+  // Both
+  pickupRemarks     String?
+  pickupInstructionSentAt DateTime? // last time it was emailed to transport
+
+  // Payments and billing (milestones; can be recorded after the shipment is closed).
+  etrackPaidAt       DateTime? // E-track payment
+  shippingLinePaidAt DateTime? // shipping line payment
+  invoicedAt         DateTime? // billing invoice sent to the customer; null = unbilled
+  invoiceNo          String?
 
   etdMnl DateTime? // null allowed at DB level so intake can save; flagged as missing data
   atdMnl DateTime?
@@ -251,6 +304,7 @@ model Shipment {
   @@index([assignedCsId])
   @@index([shipperId])
   @@index([etdMnl])
+  @@index([invoicedAt])
 }
 
 // Atomic counters for Job No. and HBL No. Key examples: "JOB:2610", "HBL:26".

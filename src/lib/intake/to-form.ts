@@ -81,6 +81,7 @@ export function extractionToForm(
     values: {
       shipperId: shipper?.id ?? "",
       consigneeName: "",
+      pickupAddress: "", // the form fills it from the matched shipper
       destinationPort: destination,
       pod: destination,
       cargoType,
@@ -99,9 +100,13 @@ export function extractionToForm(
       assignedCsId,
       arrastreCutoffAt: "",
       podCode: podCodeFor(destination) ?? "",
+      hblType: "NNR",
       declarationBy: "NNR",
       declarationForwarder: "",
       partOfHblNo: "",
+      cargoArrangement: "NNR_PICKUP", hasCoo: false, positioningAt: "", morePositioningAt: [], containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
+      cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
+      vesselName: "", voyageNo: "", freightTerms: "", incoterm: "",
     },
   };
 }

@@ -14,6 +14,7 @@ import type { ShipmentFormState } from "@/components/ShipmentForm";
 import { createFieldLink, revokeFieldLink } from "@/lib/field-links";
 import { formatDateTime } from "@/lib/time";
 import { formValuesOf } from "../data";
+import { instructionChanges, sendPickupInstruction } from "@/lib/pickup-instruction";
 
 export type ActionState = { ok?: string; error?: string };
 
@@ -24,16 +25,24 @@ const Id = z.string().uuid();
 export async function updateShipmentAction(id: string, _prev: ShipmentFormState, form: FormData): Promise<ShipmentFormState> {
   const user = await requireUser(["CS", "SUPERVISOR"]);
   await assertShipmentAccess(user, Id.parse(id));
-  const parsed = parseShipmentForm(form);
+  const before = await prisma.shipment.findUniqueOrThrow({ where: { id: Id.parse(id) } });
+  // Until the cargo is picked up, the instruction must stay complete.
+  const parsed = parseShipmentForm(form, { requireInstruction: !before.actualPickupAt });
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
+  let after: Awaited<ReturnType<typeof updateShipment>>;
   try {
-    await updateShipment(prisma, Id.parse(id), parsed.data, user, { now: await now() });
+    after = await updateShipment(prisma, Id.parse(id), parsed.data, user, { now: await now() });
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message, values: formValuesOf(form) };
     throw e;
   }
+  // Something on the instruction changed before pick-up: send the revised one to transport.
+  let pi = "";
+  if (!before.actualPickupAt && instructionChanges(before, after).length > 0) {
+    pi = `?pi=${(await sendPickupInstruction(prisma, id, user.id, await now(), { revised: true })).status}&revised=1`;
+  }
   revalidatePath(`/shipments/${id}`);
-  redirect(`/shipments/${id}`);
+  redirect(`/shipments/${id}${pi}`);
 }
 
 // ---------- milestones
@@ -109,8 +118,11 @@ export async function editHblAction(_prev: ActionState, form: FormData): Promise
     if (e instanceof DomainError) return { error: e.message };
     throw e;
   }
+  // The HBL is on the instruction, so transport gets the revised one (only while pick-up is still to come).
+  const s = await prisma.shipment.findUniqueOrThrow({ where: { id: p.data.shipmentId }, select: { actualPickupAt: true } });
+  const r = s.actualPickupAt ? null : await sendPickupInstruction(prisma, p.data.shipmentId, user.id, await now(), { revised: true });
   revalidatePath(`/shipments/${p.data.shipmentId}`);
-  return { ok: "HBL No. updated." };
+  return { ok: r?.status === "sent" ? "HBL No. updated. Revised pick-up instruction sent to transport." : "HBL No. updated." };
 }
 
 // ---------- field magic links
@@ -164,4 +176,19 @@ export async function revertMilestoneAction(_prev: ActionState, form: FormData):
   }
   revalidatePath(`/shipments/${p.data.shipmentId}`);
   return { ok: "Reverted." };
+}
+
+// ---------- pick-up instruction to transport
+
+export async function sendPickupInstructionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const user = await requireUser(["CS", "SUPERVISOR"]);
+  const shipmentId = Id.safeParse(form.get("shipmentId"));
+  if (!shipmentId.success) return { error: "Invalid request." };
+  await assertShipmentAccess(user, shipmentId.data);
+  const r = await sendPickupInstruction(prisma, shipmentId.data, user.id, await now());
+  revalidatePath(`/shipments/${shipmentId.data}`);
+  if (r.status === "not_needed") return { error: "Delivered by consignee: there is nothing to send to transport." };
+  if (r.status === "no_recipients") return { error: "No transport email saved yet. Add one under Transport first." };
+  if (r.status === "failed") return { error: `Not sent: ${r.error}` };
+  return { ok: `Sent to ${r.to.join(", ")}` };
 }

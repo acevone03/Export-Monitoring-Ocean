@@ -20,6 +20,14 @@ Demo logins (password `nnr-demo-2026`): `sup1@nnr.test`, `sup2@nnr.test` (superv
 
 To start over: delete `prisma/dev.db` and run `npm run setup` again.
 
+To remove the demo (or any) shipments and shippers but keep users and settings: stop the app and run
+`npm run clear-data` (type DELETE to confirm). A backup is saved first as `prisma/backup-YYYYMMDD-HHMM.db`.
+
+To set up the real team and remove the demo logins: copy `users.example.csv` to `users.csv`, fill in names,
+emails, roles and job titles, then run `npm run setup-users`. It prints a temporary password for each new person
+(shown once); they change it under **My account** (click your name, top right). Supervisors can also
+**Reset password** on the Users page. `users.csv` is never uploaded to GitHub.
+
 ### Demo: watch a deadline go amber, then red
 
 1. Log in as `sup1@nnr.test`, create a shipment with requested pick-up about 5 hours from now.
@@ -40,6 +48,23 @@ Supervisors import NNR's monitoring sheet (`.xlsx` or `.csv`, as is) at **Import
 Rows older than the history cut-off (default 30 days) come in as closed history, so they don't raise alerts.
 Rows with problems are listed and downloadable as "rows to fix"; re-uploading is safe.
 How each column is read: [`docs/import.md`](docs/import.md). The board and the Excel raw sheet use the same columns.
+
+### Shippers and new shipments
+
+Every shipper has a permanent code (`SHP-0001`, …) assigned when it is added, and a name can only be added
+once (case, punctuation and Inc/Corp are ignored). On **New shipment**, type the shipper's name or code:
+the contact line and pick-up address fill in from the shipper (the address can be changed per shipment).
+
+### Pick-up instruction to transport
+
+Save the trucking company's email addresses under **Transport**. When a shipment is created, its pick-up
+instruction (FCL: positioning, container yard, sizes, port of loading, cut-off; LCL: consol, GW, CBM,
+dimensions, delivery warehouse) is emailed to them. Resend from the shipment page. Without SMTP it lands in `/dev/outbox`.
+
+### Scripture
+
+A verse of the day (Psalms and the writings of the apostles and Paul, KJV) shows under the menu; **Scripture**
+(`/scripture`) has the full text and a word search. To rebuild the text file: see `scripts/gen-scripture.mjs`.
 
 ### Process map
 

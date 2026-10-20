@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { manilaDateTime } from "./shipment-input";
+import { manilaDate, manilaDateTime } from "./shipment-input";
 
 // Form payload for recording a milestone from the shipment page.
 // Every time field is optional: blank (or absent) means "now", applied by the caller.
 const optionalTime = z.string().optional().transform((v) => v ?? "").pipe(manilaDateTime);
+const optionalDate = z.string().optional().transform((v) => v ?? "").pipe(manilaDate); // ETA: date only
 const str = z.string().trim();
 
 export const MilestoneFormSchema = z.discriminatedUnion("kind", [
@@ -20,8 +21,11 @@ export const MilestoneFormSchema = z.discriminatedUnion("kind", [
     subject: str.min(1, "Enter the email subject").max(300),
   }),
   z.object({ kind: z.literal("DOCS_TO_OVERSEAS"), at: optionalTime }),
-  z.object({ kind: z.literal("DEPARTED"), at: optionalTime, eta: optionalTime }),
+  z.object({ kind: z.literal("DEPARTED"), at: optionalTime, eta: optionalDate }),
   z.object({ kind: z.literal("ARRIVED"), at: optionalTime }),
+  z.object({ kind: z.literal("ETRACK_PAID"), at: optionalTime }),
+  z.object({ kind: z.literal("INVOICED"), at: optionalTime, invoiceNo: str.max(50).optional().transform((v) => v || null) }),
+  z.object({ kind: z.literal("SHIPPING_LINE_PAID"), at: optionalTime }),
   z.object({ kind: z.literal("CLOSED") }),
   z.object({ kind: z.literal("CANCELLED"), reason: str.min(3, "Give a reason for cancelling").max(500) }),
 ]);

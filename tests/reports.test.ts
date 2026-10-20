@@ -25,7 +25,12 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
   return {
     id: `s${n}`, jobNo: `EX-O-2610-${String(n).padStart(4, "0")}`, hblNo: `NNRMNLLAXF${String(9000 + n)}`,
     status: "PICKUP_SCHEDULED", cargoType: "FCL", containerPlan: [{ size: "40HC", qty: 1 }], lclQty: null, lclUnit: null,
-    destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, carrierName: "Maersk", carrierBookingRef: "B1",
+    destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, pickupAddress: null,
+    positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null, consolidator: null, grossWeightKg: null, cbm: null,
+    cargoArrangement: "NNR_PICKUP", morePositioningAt: null, hasCoo: false,
+    cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null, pickupRemarks: null, pickupInstructionSentAt: null,
+    vesselName: null, voyageNo: null, freightTerms: null, incoterm: null,
+    hblType: "NNR", etrackPaidAt: null, shippingLinePaidAt: null, invoicedAt: null, invoiceNo: null, carrierName: "Maersk", carrierBookingRef: "B1",
     carrierRemarks: null, arrastreResponsibility: "NNR", exportDeclarationStatus: "PENDING",
     requestedPickupAt: t(48), actualPickupAt: null, fsiCutoffAt: t(72), fsiSubmittedAt: null,
     preadviseCutoffAt: t(80), preadviseSentAt: null, bocDeadlineAt: t(48), bocUploadAt: null,
@@ -59,6 +64,15 @@ describe("daily report", () => {
     ]);
     expect(sec("cutoffs").map((i) => [i.jobNo, i.what])).toEqual([[fsiToday.jobNo, "FSI cut-off"]]);
     expect(sec("departed").map((i) => i.jobNo)).toEqual([departed.jobNo]);
+  });
+
+  it("tags open items due today (red) and tomorrow (orange), not done ones", () => {
+    const tagOf = (k: string, job: string) => sec(k).find((i) => i.jobNo === job)?.dueTag;
+    expect(tagOf("pickups", overdue.jobNo)).toBe("today");
+    expect(tagOf("pickups", pickupTomorrow.jobNo)).toBe("tomorrow");
+    expect(tagOf("cutoffs", fsiToday.jobNo)).toBe("today");
+    const done = buildDailyReport([ship({ requestedPickupAt: t(2), actualPickupAt: t(-1) })], now);
+    expect(done.sections.find((x) => x.key === "pickups")!.items[0].dueTag).toBeUndefined();
   });
 
   it("lists pending BOC/arrastre (not after departure) and missing data, never cancelled", () => {
@@ -175,5 +189,31 @@ describe("daily report schedule", () => {
     expect(mail.subject).toMatch(/^NNR daily report 0[12]-Dec-2026/);
     expect(mail.attachments[0].filename).toMatch(/\.xlsx$/);
     delete process.env.OUTBOX_DIR;
+  });
+});
+
+describe("arrastre and E-track payments in the reports", () => {
+  it("daily: lists payments made yesterday/today and E-track still unpaid after pick-up", () => {
+    const paidToday = ship({ requestedPickupAt: t(-30), actualPickupAt: t(-30), arrastrePaidAt: t(-1), etrackPaidAt: t(-2) });
+    const pickedUnpaid = ship({ requestedPickupAt: t(-30), actualPickupAt: t(-30) });
+    const notPicked = ship({ requestedPickupAt: t(30) });
+    const oldPayment = ship({ requestedPickupAt: t(-100), actualPickupAt: t(-100), etrackPaidAt: t(-80) });
+    const r = buildDailyReport([paidToday, pickedUnpaid, notPicked, oldPayment], now);
+    const sec = (k: string) => r.sections.find((s) => s.key === k)!.items;
+    expect(sec("payments").map((i) => [i.jobNo, i.what]).sort()).toEqual([[paidToday.jobNo, "Arrastre paid"], [paidToday.jobNo, "E-track paid"]].sort());
+    const etrackPending = sec("pending").filter((i) => i.what === "E-track payment").map((i) => i.jobNo);
+    expect(etrackPending).toEqual([pickedUnpaid.jobNo]);
+  });
+
+  it("monthly: counts and lists payments made in the month", () => {
+    const oct = (d: number, h = 9) => fromManila(2026, 10, d, h);
+    const rows = [
+      ship({ createdAt: oct(1), arrastrePaidAt: oct(5), etrackPaidAt: oct(6), atdMnl: oct(7), status: "DEPARTED" }),
+      ship({ createdAt: oct(1), atdMnl: oct(8), status: "DEPARTED" }), // departed without E-track
+      ship({ createdAt: oct(1), etrackPaidAt: fromManila(2026, 9, 30, 9) }), // September: not counted
+    ];
+    const r = buildMonthlyReport(rows, "2026-10", fromManila(2026, 10, 20, 9));
+    expect(r.payments).toMatchObject({ arrastrePaid: 1, etrackPaid: 1, etrackUnpaidDeparted: 1 });
+    expect(r.payments.rows.map((p) => p.what)).toEqual(["Arrastre", "E-track"]);
   });
 });

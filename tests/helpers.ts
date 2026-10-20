@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type { ShipmentInput } from "@/lib/shipment-input";
+import { createShipper } from "@/lib/shippers";
 
 export const prisma = new PrismaClient();
 
@@ -10,13 +11,14 @@ export async function fixtures() {
   const cs = await prisma.user.create({ data: { name: "CS", email: `cs-${tag}@t.test`, passwordHash: "x", role: "CS" } });
   const sup = await prisma.user.create({ data: { name: "Sup", email: `sup-${tag}@t.test`, passwordHash: "x", role: "SUPERVISOR" } });
   const field = await prisma.user.create({ data: { name: "Field", email: `f-${tag}@t.test`, passwordHash: "x", role: "FIELD" } });
-  const shipper = await prisma.shipper.create({ data: { name: `Shipper ${tag}` } });
+  const shipper = await createShipper(prisma, { name: `Shipper ${tag}` });
   return { cs, sup, field, shipper };
 }
 
 export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId" | "assignedCsId">): ShipmentInput {
   return {
     consigneeName: null,
+    pickupAddress: null,
     destinationPort: "USLAX Los Angeles",
     pod: "USLGB Long Beach",
     cargoType: "FCL",
@@ -34,9 +36,28 @@ export function input(o: Partial<ShipmentInput> & Pick<ShipmentInput, "shipperId
     carrierRemarks: null,
     arrastreCutoffAt: null,
     podCode: "LAX",
+    hblType: "NNR",
     declarationBy: "NNR",
     declarationForwarder: null,
     partOfHblNo: null,
+    cargoArrangement: "NNR_PICKUP",
+    hasCoo: false,
+    positioningAt: null,
+    morePositioningAt: [],
+    containerYard: null,
+    portOfLoading: null,
+    cyCutoffAt: null,
+    consolidator: null,
+    grossWeightKg: null,
+    cbm: null,
+    cargoDescription: null,
+    cargoDimensions: null,
+    deliveryWarehouse: null,
+    pickupRemarks: null,
+    vesselName: null,
+    voyageNo: null,
+    freightTerms: null,
+    incoterm: null,
     ...o,
   };
 }

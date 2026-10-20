@@ -8,6 +8,7 @@ import { shipmentScope } from "@/lib/access";
 import { deadlineStatuses, type RowState } from "@/lib/deadline-status";
 import { arrangeBoard, boardCounts, boardWhere, parseBoardFilters, type BoardFilters } from "@/lib/board";
 import { ClickableRow } from "@/components/ClickableRow";
+import { getCarrierLinks, trackingTarget } from "@/lib/tracking";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { BOARD_COLUMNS } from "./board-columns";
 
@@ -37,13 +38,14 @@ export default async function Board({ searchParams }: { searchParams: Promise<Re
   const include = { shipper: { select: { name: true } }, assignedCs: { select: { name: true } } } as const;
 
   // Chip counts ignore the view chip itself but respect the other filters.
-  const [rows, base, shippers, csUsers] = await Promise.all([
+  const [rows, base, shippers, csUsers, carriers] = await Promise.all([
     prisma.shipment.findMany({ where: { AND: [scope, boardWhere(f)] }, include }),
     prisma.shipment.findMany({ where: { AND: [scope, boardWhere({ ...f, view: "active" })] } }),
     prisma.shipper.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     can.viewAllShipments(user)
       ? prisma.user.findMany({ where: { role: { in: ["CS", "SUPERVISOR"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    getCarrierLinks(prisma),
   ]);
   const arranged = arrangeBoard(rows, f.view, now);
   const counts = boardCounts(base, now);
@@ -136,13 +138,14 @@ export default async function Board({ searchParams }: { searchParams: Promise<Re
           <tbody className="divide-y divide-slate-100">
             {arranged.map(({ s, state, missing }) => {
               const deadlines = Object.fromEntries(deadlineStatuses(s, now).map((d) => [d.type, d]));
+              const track = trackingTarget(carriers, s.carrierName, s.carrierBookingRef);
               return (
                 <ClickableRow key={s.id} href={`/shipments/${s.id}`} className={ROW_STYLE[state]}>
                   {BOARD_COLUMNS.map((c, i) => (
                     <td key={c.header} className={`whitespace-nowrap px-3 py-2 ${c.className ?? ""}`}>
                       {i === 0 ? (
-                        <Link href={`/shipments/${s.id}`} className="text-blue-700 hover:underline">{c.cell(s, { deadlines })}</Link>
-                      ) : c.cell(s, { deadlines })}
+                        <Link href={`/shipments/${s.id}`} className="text-blue-700 hover:underline">{c.cell(s, { deadlines, track })}</Link>
+                      ) : c.cell(s, { deadlines, track })}
                       {i === 0 && missing.length > 0 && (
                         <span className="ml-1 text-amber-600" title={`Missing: ${missing.join(", ")}`} aria-label={`Missing: ${missing.join(", ")}`}>⚠</span>
                       )}

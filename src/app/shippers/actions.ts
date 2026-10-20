@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { createShipper, DuplicateShipperError } from "@/lib/shippers";
 
 const opt = (max: number) => z.string().trim().max(max).transform((v) => v || null);
 const ShipperSchema = z.object({
@@ -22,12 +22,15 @@ export async function createShipperAction(_prev: ShipperState, form: FormData): 
   await requireUser(["CS", "SUPERVISOR"]);
   const parsed = ShipperSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  let code: string;
   try {
-    await prisma.shipper.create({ data: parsed.data });
+    code = (await createShipper(prisma, parsed.data)).code;
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { error: "A shipper with that name already exists." };
+    // Also catches names that differ only in case, punctuation or Inc/Corp ("ABC Corp." vs "abc corporation").
+    if (e instanceof DuplicateShipperError) return { error: e.message };
     throw e;
   }
   revalidatePath("/shippers");
-  return { ok: `Added ${parsed.data.name}` };
+  revalidatePath("/shipments/new");
+  return { ok: `Added ${code} · ${parsed.data.name}` };
 }

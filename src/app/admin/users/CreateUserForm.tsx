@@ -14,9 +14,10 @@ export function CreateUserForm() {
         <select name="role" className="input" defaultValue="CS">
           <option value="CS">Customer Service</option>
           <option value="FIELD">Field / Customs</option>
-          <option value="SUPERVISOR">Supervisor</option>
+          <option value="SUPERVISOR">Supervisor (manages users, rules, import)</option>
         </select>
       </div>
+      <div><label className="label">Job title (optional)</label><input name="title" className="input" placeholder="e.g. CS Export Assistant" /></div>
       <div><label className="label">Phone (optional)</label><input name="phone" className="input" /></div>
       <div className="sm:col-span-2">
         <label className="label">Initial password</label>

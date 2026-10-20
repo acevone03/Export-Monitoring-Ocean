@@ -13,7 +13,7 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
   const s = await prisma.shipment.findUnique({ where: { id } }).catch(() => null);
   if (!s) notFound();
   if (s.status === "CLOSED" || s.status === "CANCELLED") redirect(`/shipments/${id}`);
-  const { shippers, csUsers, destinations } = await formOptions();
+  const { shippers, csUsers, destinations, carrierNames } = await formOptions();
   return (
     <div className="space-y-4">
       <div className="flex items-baseline gap-3">
@@ -22,6 +22,7 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
       </div>
       <p className="text-sm text-slate-600">
         Milestones (pick-up done, FSI, uploads, payments, departure) are recorded from the shipment page, not here.
+        {!s.actualPickupAt && " If you change anything on the pick-up instruction, the revised instruction is emailed to transport when you save."}
       </p>
       <ShipmentForm
         action={updateShipmentAction.bind(null, id)}
@@ -30,7 +31,10 @@ export default async function EditShipmentPage({ params }: { params: Promise<{ i
         shippers={shippers}
         csUsers={csUsers}
         destinations={destinations}
+        carrierNames={carrierNames}
         initial={toFormValues(s)}
+        hblNo={s.hblNo}
+        requireInstruction={!s.actualPickupAt}
       />
     </div>
   );

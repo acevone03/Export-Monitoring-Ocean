@@ -29,7 +29,8 @@ export function dailyReportText(r: DailyReport, forName: string): string {
     for (const i of sec.items.slice(0, MAX_LINES)) {
       const when = i.at ? formatDateTime(i.at) : "no date";
       const done = i.doneAt && sec.key !== "departed" ? ` [done ${formatDateTime(i.doneAt)}]` : "";
-      lines.push(`  ${i.jobNo}  ${i.what}  ${when}${done}  ${i.shipper}${i.detail ? `  (${i.detail})` : ""}  CS: ${i.cs}`);
+      const flag = i.dueTag === "today" ? "[DUE TODAY] " : i.dueTag === "tomorrow" ? "[DUE TOMORROW] " : "";
+      lines.push(`  ${flag}${i.jobNo}  ${i.what}  ${when}${done}  ${i.shipper}${i.detail ? `  (${i.detail})` : ""}  CS: ${i.cs}`);
     }
     if (sec.items.length > MAX_LINES) lines.push(`  …and ${sec.items.length - MAX_LINES} more (see the attached Excel)`);
     lines.push("");

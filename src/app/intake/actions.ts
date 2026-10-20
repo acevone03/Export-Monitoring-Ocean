@@ -10,6 +10,7 @@ import { now } from "@/lib/clock";
 import { anthropicClient, extractBooking, ExtractionError, intakeEnabled, intakeModel } from "@/lib/intake/extract";
 import { parseShipmentForm } from "@/lib/shipment-input";
 import { createShipment, DomainError } from "@/lib/shipments";
+import { sendPickupInstruction } from "@/lib/pickup-instruction";
 import type { ShipmentFormState } from "@/components/ShipmentForm";
 import { formValuesOf } from "../shipments/data";
 
@@ -80,7 +81,7 @@ export async function confirmIntakeAction(intakeId: string, _p: ShipmentFormStat
   } catch {
     return { error: "Intake not found." };
   }
-  const parsed = parseShipmentForm(form);
+  const parsed = parseShipmentForm(form, { requireInstruction: true });
   if (!parsed.ok) return { fieldErrors: parsed.fieldErrors, values: formValuesOf(form) };
 
   // Claim the intake first so a double click cannot create two shipments.
@@ -97,5 +98,6 @@ export async function confirmIntakeAction(intakeId: string, _p: ShipmentFormStat
     if (e instanceof DomainError) return { error: e.message, values: formValuesOf(form) };
     throw e;
   }
-  redirect(`/shipments/${shipmentId}?created=1`);
+  const pi = await sendPickupInstruction(prisma, shipmentId, user.id, await now());
+  redirect(`/shipments/${shipmentId}?created=1&pi=${pi.status}`);
 }

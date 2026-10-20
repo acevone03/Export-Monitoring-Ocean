@@ -1,18 +1,20 @@
 import { z } from "zod";
-import { parseManilaInput } from "./time";
+import { formatInstructionDate, parseManilaInput, startOfManilaDay } from "./time";
 import { podCodeFor, POD_CODE_RE } from "./pod-codes";
+import { CONTAINER_SIZES, FREIGHT_TERMS, INCOTERMS, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
 
 // Validation for the shipment form (create and edit). Every API boundary that
 // writes shipment fields goes through ShipmentInputSchema.
 
-export const CONTAINER_SIZES = ["20", "40", "40HC"] as const;
-export type ContainerSize = (typeof CONTAINER_SIZES)[number];
-export type ContainerPlan = Array<{ size: ContainerSize; qty: number }>;
+export { CONTAINER_SIZES, type ContainerSize, type ContainerPlan } from "./containers";
 
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).transform((v) => v || null);
 
 /** <input type="datetime-local"> value, interpreted as Asia/Manila. Empty -> null. */
+/** A booking number used as a Direct BL's HBL No. (same rule as a manual HBL correction). */
+export const DIRECT_HBL_RE = /^[A-Z0-9-]{4,30}$/;
+
 export const manilaDateTime = z.string().trim().transform((v, ctx) => {
   if (!v) return null;
   const d = parseManilaInput(v);
@@ -22,6 +24,66 @@ export const manilaDateTime = z.string().trim().transform((v, ctx) => {
   }
   return d;
 });
+
+/**
+ * Date-only field (ETD, ETA): <input type="date"> "YYYY-MM-DD", stored as 00:00 Manila.
+ * A date-time value (spreadsheet import, older forms) keeps just its Manila date. Empty -> null.
+ */
+export const manilaDate = z.string().trim().transform((v, ctx) => {
+  if (!v) return null;
+  const d = parseManilaInput(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00` : v);
+  if (!d) {
+    ctx.addIssue({ code: "custom", message: "Invalid date" });
+    return z.NEVER;
+  }
+  return startOfManilaDay(d);
+});
+
+// Pick-up instruction fields are optional keys so older callers (the spreadsheet import) still validate.
+const instrText = (max: number) => z.string().trim().max(max, `Keep it under ${max} characters`).optional().transform((v) => v || null);
+const instrDateTime = z.string().optional().transform((v) => v ?? "").pipe(manilaDateTime);
+/** <input type="date"> value (YYYY-MM-DD) as Manila midnight. Empty -> null. */
+const instrDate = z.string().trim().optional().transform((v, ctx) => {
+  if (!v) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(v) ? parseManilaInput(`${v}T00:00`) : null;
+  if (!d) {
+    ctx.addIssue({ code: "custom", message: "Invalid date" });
+    return z.NEVER;
+  }
+  return d;
+});
+const instrNumber = (label: string, max: number) =>
+  z.string().trim().optional()
+    .transform((v) => (v ? Number(v.replace(/,/g, "")) : null))
+    .pipe(z.number(`${label} must be a number`).min(0, `${label} cannot be negative`).max(max).nullable());
+
+/** Extra positioning boxes, sent by the form as a JSON list of datetime-local strings. Blanks are dropped. */
+const morePositioning = z.string().optional().transform((v, ctx) => {
+  if (!v) return [] as Date[];
+  let list: unknown;
+  try {
+    list = JSON.parse(v);
+  } catch {
+    list = null;
+  }
+  if (!Array.isArray(list) || list.some((x) => typeof x !== "string")) {
+    ctx.addIssue({ code: "custom", message: "Invalid positioning dates" });
+    return z.NEVER;
+  }
+  const filled = (list as string[]).map((x) => x.trim()).filter(Boolean);
+  if (filled.length > 50) {
+    ctx.addIssue({ code: "custom", message: "Up to 50 positioning dates" });
+    return z.NEVER;
+  }
+  const dates = filled.map(parseManilaInput);
+  if (dates.some((d) => !d)) {
+    ctx.addIssue({ code: "custom", message: "One of the positioning dates is not a valid date and time" });
+    return z.NEVER;
+  }
+  return dates as Date[];
+});
+
+const sameManilaDay = (a: Date, b: Date) => startOfManilaDay(a).getTime() === startOfManilaDay(b).getTime();
 
 const ContainerPlanSchema = z.array(
   z.object({
@@ -34,6 +96,8 @@ export const ShipmentInputSchema = z
   .object({
     shipperId: z.string().uuid("Pick a shipper from the list"),
     consigneeName: optText(200),
+    // Optional so callers that predate the field (the spreadsheet import) still validate.
+    pickupAddress: z.string().trim().max(300, "Address is too long").optional().transform((v) => v || null),
     destinationPort: text(100).min(1, "Destination is required"),
     pod: text(100).min(1, "Port of discharge is required"),
     cargoType: z.enum(["FCL", "LCL"]),
@@ -62,8 +126,8 @@ export const ShipmentInputSchema = z
     fsiCutoffAt: manilaDateTime,
     preadviseCutoffAt: manilaDateTime,
     arrastreCutoffAt: manilaDateTime,
-    etdMnl: manilaDateTime,
-    eta: manilaDateTime,
+    etdMnl: manilaDate,
+    eta: manilaDate,
     arrastreResponsibility: z.enum(["NNR", "SHIPPER"]),
     carrierName: optText(100),
     carrierBookingRef: optText(50),
@@ -71,9 +135,36 @@ export const ShipmentInputSchema = z
     assignedCsId: z.string().uuid("Choose the assigned CS"),
     // HBL destination code (TYO in NNRMNLTYOF9904). Blank: worked out from the destination.
     podCode: z.string().trim().toUpperCase().max(3),
+    // NNR consolidation (NNR's own HBL number) or DIRECT (the booking number is the HBL). Optional key: older callers mean NNR.
+    hblType: z.string().optional().transform((v) => v || "NNR").pipe(z.enum(["NNR", "DIRECT"], "Choose NNR Consolidation or Direct")),
     declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
     declarationForwarder: optText(100),
     partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
+    // NNR picks the cargo up (instruction emailed to transport) or the consignee delivers it. Optional key: older callers mean NNR.
+    cargoArrangement: z.string().optional().transform((v) => v || "NNR_PICKUP")
+      .pipe(z.enum(["NNR_PICKUP", "CONSIGNEE_DELIVERY"], "Choose pick-up by NNR or delivered by consignee")),
+    // Certificate of Origin: a ticked checkbox sends "on".
+    hasCoo: z.string().optional().transform((v) => v === "on" || v === "true" || v === "1"),
+    // Pick-up instruction: FCL
+    positioningAt: instrDateTime,
+    morePositioningAt: morePositioning,
+    containerYard: instrText(200),
+    portOfLoading: z.string().optional().transform((v) => v || null).pipe(z.enum(PORTS_OF_LOADING, "Pick a port of loading from the list").nullable()),
+    cyCutoffAt: instrDate,
+    // Pick-up instruction: LCL
+    consolidator: instrText(100),
+    grossWeightKg: instrNumber("Gross weight", 1_000_000),
+    cbm: instrNumber("CBM", 10_000),
+    cargoDescription: instrText(500),
+    cargoDimensions: instrText(500),
+    deliveryWarehouse: instrText(200),
+    // Both
+    pickupRemarks: instrText(2000),
+    // Booking sheet: vessel, voyage, freight terms and Incoterms (all optional)
+    vesselName: instrText(100),
+    voyageNo: instrText(30),
+    freightTerms: z.string().optional().transform((v) => v || null).pipe(z.enum(FREIGHT_TERMS, "Choose Prepaid or Collect").nullable()),
+    incoterm: z.string().optional().transform((v) => v || null).pipe(z.enum(INCOTERMS, "Pick an Incoterm from the list").nullable()),
   })
   .superRefine((v, ctx) => {
     if (v.cargoType === "FCL") {
@@ -85,23 +176,61 @@ export const ShipmentInputSchema = z
         ctx.addIssue({ code: "custom", path: ["containerPlan"], message: "List each container size once" });
       }
     }
+    if (v.cargoType === "FCL") {
+      if (v.morePositioningAt.length > 0 && !v.positioningAt) {
+        ctx.addIssue({ code: "custom", path: ["positioningAt"], message: "Fill in the first positioning date before adding more" });
+      }
+      const all = [v.positioningAt, ...v.morePositioningAt].filter((d): d is Date => !!d);
+      const times = all.map((d) => d.getTime());
+      if (new Set(times).size !== times.length) {
+        ctx.addIssue({ code: "custom", path: ["morePositioningAt"], message: "The same positioning date and time is entered twice" });
+      }
+      // Cut-off and positioning must be on different days (NNR, 20-Oct-2026).
+      const clash = v.cyCutoffAt ? all.find((d) => sameManilaDay(d, v.cyCutoffAt!)) : undefined;
+      if (clash) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cyCutoffAt"],
+          message: `Cut-off cannot be on the same day as a positioning date (${formatInstructionDate(clash)})`,
+        });
+      }
+    }
     if (v.cargoType === "LCL" && (!v.lclQty || !v.lclUnit)) {
       ctx.addIssue({ code: "custom", path: ["lclQty"], message: "Enter LCL quantity and unit" });
     }
-    if (v.etdMnl && v.eta && v.eta <= v.etdMnl) {
-      ctx.addIssue({ code: "custom", path: ["eta"], message: "ETA must be after ETD" });
+    if (v.etdMnl && v.eta && v.eta < v.etdMnl) {
+      ctx.addIssue({ code: "custom", path: ["eta"], message: "ETA cannot be before ETD" });
     }
     const code = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort);
-    if (!code || !POD_CODE_RE.test(code)) {
+    if (v.hblType === "DIRECT") {
+      // The booking number becomes the HBL No., so it must be there and usable as one.
+      if (!v.carrierBookingRef) {
+        ctx.addIssue({ code: "custom", path: ["carrierBookingRef"], message: "Booking number is required for a Direct BL (it becomes the HBL)" });
+      } else if (!DIRECT_HBL_RE.test(v.carrierBookingRef.toUpperCase())) {
+        ctx.addIssue({ code: "custom", path: ["carrierBookingRef"], message: "For a Direct BL the booking number may only have letters, digits and dashes (4–30)" });
+      }
+    } else if (!code || !POD_CODE_RE.test(code)) {
       ctx.addIssue({ code: "custom", path: ["podCode"], message: "Enter the 3-letter HBL destination code (e.g. TYO)" });
     }
   })
   // Drop the fields that do not apply to the chosen cargo type.
   .transform((v) => {
-    const podCode = (v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort))!;
-    return v.cargoType === "FCL"
-      ? { ...v, podCode, lclQty: null, lclUnit: null }
-      : { ...v, podCode, containerPlan: [] as ContainerPlan };
+    // Only NNR HBLs use the destination code; a Direct BL keeps it if known, for reference.
+    const podCode: string | null = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort) || null;
+    // FCL cut-off is entered by CS and must not share a day with any positioning date (NNR, 20-Oct-2026;
+    // until then it was copied from the positioning date). Positioning dates are kept in time order:
+    // the earliest in positioningAt (board, booking sheet), the rest in morePositioningAt.
+    if (v.cargoType === "FCL") {
+      const all = [v.positioningAt, ...v.morePositioningAt].filter((d): d is Date => !!d).sort((a, b) => a.getTime() - b.getTime());
+      return {
+        ...v, podCode, positioningAt: all[0] ?? null, morePositioningAt: all.slice(1).map((d) => d.toISOString()),
+        lclQty: null, lclUnit: null, consolidator: null, cbm: null, cargoDimensions: null, deliveryWarehouse: null,
+      };
+    }
+    return {
+      ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, morePositioningAt: [] as string[],
+      containerYard: null, portOfLoading: null, cyCutoffAt: null,
+    };
   });
 
 export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
@@ -109,6 +238,7 @@ export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
 export const SHIPMENT_FORM_KEYS = [
   "shipperId",
   "consigneeName",
+  "pickupAddress",
   "destinationPort",
   "pod",
   "cargoType",
@@ -127,24 +257,67 @@ export const SHIPMENT_FORM_KEYS = [
   "assignedCsId",
   "arrastreCutoffAt",
   "podCode",
+  "hblType",
   "declarationBy",
   "declarationForwarder",
   "partOfHblNo",
+  "cargoArrangement",
+  "hasCoo",
+  "positioningAt",
+  "morePositioningAt",
+  "containerYard",
+  "portOfLoading",
+  "cyCutoffAt",
+  "consolidator",
+  "grossWeightKg",
+  "cbm",
+  "cargoDescription",
+  "cargoDimensions",
+  "deliveryWarehouse",
+  "pickupRemarks",
+  "vesselName",
+  "voyageNo",
+  "freightTerms",
+  "incoterm",
 ] as const;
 
 export type FieldErrors = Partial<Record<string, string>>;
 
+/**
+ * Pick-up instruction fields the transport company cannot work without. Checked on the form only
+ * (not the spreadsheet import), for new shipments and for edits before the pick-up is done.
+ */
+export function missingInstructionFields(d: ShipmentInput): FieldErrors {
+  const e: FieldErrors = {};
+  if (d.cargoType === "FCL") {
+    if (!d.positioningAt) e.positioningAt = "Positioning date and time is required for FCL";
+    if (!d.portOfLoading) e.portOfLoading = "Port of loading is required for FCL";
+    if (!d.cyCutoffAt) e.cyCutoffAt = "Cut-off date is required for FCL";
+  }
+  return e;
+}
+
 /** FormData -> validated input, or the first error per field. */
 export function parseShipmentForm(
   form: FormData,
+  opts: { requireInstruction?: boolean } = {},
 ): { ok: true; data: ShipmentInput } | { ok: false; fieldErrors: FieldErrors } {
   const raw = Object.fromEntries(SHIPMENT_FORM_KEYS.map((k) => [k, String(form.get(k) ?? "")]));
   const parsed = ShipmentInputSchema.safeParse(raw);
-  if (parsed.success) return { ok: true, data: parsed.data };
+  if (parsed.success) {
+    const missing = opts.requireInstruction ? missingInstructionFields(parsed.data) : {};
+    return Object.keys(missing).length ? { ok: false, fieldErrors: missing } : { ok: true, data: parsed.data };
+  }
   const fieldErrors: FieldErrors = {};
   for (const issue of parsed.error.issues) {
     const key = String(issue.path[0] ?? "_form");
     fieldErrors[key] ??= issue.message;
+  }
+  // Show the required-field errors together with the others, not on a second save.
+  if (opts.requireInstruction && raw.cargoType === "FCL") {
+    if (!raw.positioningAt.trim()) fieldErrors.positioningAt ??= "Positioning date and time is required for FCL";
+    if (!raw.portOfLoading.trim()) fieldErrors.portOfLoading ??= "Port of loading is required for FCL";
+    if (!raw.cyCutoffAt.trim()) fieldErrors.cyCutoffAt ??= "Cut-off date is required for FCL";
   }
   return { ok: false, fieldErrors };
 }

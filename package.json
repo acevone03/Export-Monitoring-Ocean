@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -10,10 +11,12 @@
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
-    "setup": "prisma migrate deploy && tsx --env-file=.env prisma/seed.ts",
+    "setup": "prisma migrate deploy && prisma generate && tsx --env-file=.env prisma/seed.ts",
     "scheduler": "tsx --env-file=.env scripts/scheduler.ts",
     "tick": "tsx --env-file=.env scripts/scheduler.ts --once",
-    "docs": "tsx scripts/gen-docs.ts"
+    "docs": "tsx scripts/gen-docs.ts",
+    "clear-data": "tsx --env-file=.env scripts/clear-data.ts",
+    "setup-users": "tsx --env-file=.env scripts/setup-users.ts"
   },
   "prisma": {
     "seed": "tsx --env-file=.env prisma/seed.ts"

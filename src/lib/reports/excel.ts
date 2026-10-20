@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import type { CellValue, ExportShipment } from "../columns";
 import { EXTRA_COLUMNS, SHEET_COLUMNS, SHEET_VALUE } from "../nnr-sheet";
-import { formatDateTime } from "../time";
+import { formatDateTime, isManilaMidnight } from "../time";
 import type { DailyReport } from "./daily";
 import type { MonthlyReport } from "./monthly";
 
@@ -10,7 +10,11 @@ import type { MonthlyReport } from "./monthly";
 
 const MANILA_MS = 8 * 3_600_000;
 const DATE_FMT = "dd-mmm-yyyy hh:mm";
+const DAY_FMT = "dd-mmm-yyyy"; // date-only values (ETD, ETA, cut-off) are stored at 00:00 Manila
+const fmtFor = (d: Date) => (isManilaMidnight(d) ? DAY_FMT : DATE_FMT);
 const RED = "FFFDE2E2";
+const DUE_TODAY = "FFFCA5A5"; // red: due today
+const DUE_TOMORROW = "FFFED7AA"; // orange: due tomorrow
 const HEADER = "FFE2E8F0";
 
 const toCell = (v: CellValue) => (v instanceof Date ? new Date(v.getTime() + MANILA_MS) : v ?? "");
@@ -19,7 +23,7 @@ function table(
   ws: ExcelJS.Worksheet,
   columns: Array<{ header: string; width?: number }>,
   rows: CellValue[][],
-  opts: { startRow?: number; fill?: string } = {},
+  opts: { startRow?: number; fill?: string; rowFill?: (rowIndex: number) => string | undefined } = {},
 ) {
   const start = opts.startRow ?? 1;
   const header = ws.getRow(start);
@@ -36,8 +40,9 @@ function table(
     r.forEach((v, ci) => {
       const cell = row.getCell(ci + 1);
       cell.value = toCell(v) as ExcelJS.CellValue;
-      if (v instanceof Date) cell.numFmt = DATE_FMT;
-      if (opts.fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fill } };
+      if (v instanceof Date) cell.numFmt = fmtFor(v);
+      const fill = opts.rowFill?.(ri) ?? opts.fill;
+      if (fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
     });
   });
   return start + 1 + rows.length;
@@ -80,7 +85,7 @@ export function rawSheet(wb: ExcelJS.Workbook, shipments: ExportShipment[]) {
     const put = (col: number, v: CellValue) => {
       const cell = row.getCell(col);
       cell.value = toCell(v) as ExcelJS.CellValue;
-      if (v instanceof Date) cell.numFmt = DATE_FMT;
+      if (v instanceof Date) cell.numFmt = fmtFor(v);
     };
     SHEET_COLUMNS.forEach((c, i) => put(i + 1, SHEET_VALUE[c.key](s)));
     EXTRA_COLUMNS.forEach((c, i) => put(n + 2 + i, c.value(s)));
@@ -118,6 +123,7 @@ export async function dailyWorkbook(report: DailyReport, shipments: ExportShipme
     row = table(ws, cols, sec.items.map((i) => [i.jobNo, i.shipper, i.what, i.at, i.doneAt, i.detail ?? "", i.cs]), {
       startRow: row,
       fill: sec.tone === "red" ? RED : undefined,
+      rowFill: (ri) => (sec.items[ri].dueTag === "today" ? DUE_TODAY : sec.items[ri].dueTag === "tomorrow" ? DUE_TOMORROW : undefined),
     }) + 1;
   }
   rawSheet(wb, shipments);
@@ -145,7 +151,14 @@ export async function monthlyWorkbook(r: MonthlyReport, shipments: ExportShipmen
     ["Arrastre paid on time", r.arrastre.onTime],
     ["Arrastre paid late", r.arrastre.late],
     ["Arrastre unpaid and overdue", r.arrastre.unpaidOverdue],
+    ["Arrastre payments made this month", r.payments.arrastrePaid],
+    ["E-track payments made this month", r.payments.etrackPaid],
+    ["Departed this month, E-track not paid", r.payments.etrackUnpaidDeparted],
   ], { startRow: 4 });
+
+  const pay = wb.addWorksheet("Payments", { views: [{ state: "frozen", ySplit: 1 }] });
+  table(pay, [{ header: "Paid", width: 18 }, { header: "Payment", width: 12 }, { header: "Job No.", width: 16 }, { header: "HBL No.", width: 20 }, { header: "Shipper", width: 30 }, { header: "CS", width: 16 }],
+    r.payments.rows.map((p) => [p.paidAt, p.what, p.jobNo, p.hblNo ?? "", p.shipper, p.cs]));
 
   const ot = wb.addWorksheet("On-time rate");
   table(ot, [{ header: "Deadline", width: 24 }, { header: "On time" }, { header: "Late" }, { header: "Open & overdue" }, { header: "Total" }, { header: "On-time %" }],

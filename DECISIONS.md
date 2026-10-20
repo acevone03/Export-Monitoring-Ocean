@@ -412,3 +412,138 @@ real data are **not** in the repository; tests use invented rows under the real 
 4. "PART OF 7002" = belongs to shipment 7002: yes.
 5. The sheet is in booking order: yes.
 6. Old `MNL…` HBLs stay as written: yes.
+
+## Shipper codes, pick-up address auto-fill, Scripture (19-Oct-2026)
+
+1. **Shipper code**: every shipper gets a permanent code `SHP-0001`, `SHP-0002`, … from its own
+   counter (`NumberSequence` key `SHIPPER`), the same way Job and HBL numbers are issued. Codes are never
+   reused or edited. Existing shippers were numbered in the order they were created (migration
+   `20261019090000_shipper_code_pickup_address`).
+2. **No repeated shipper names**: a new shipper is refused when its name matches an existing one ignoring
+   case, spacing, punctuation and Inc/Corp/Co/Ltd/Phils (the same rule the import uses), e.g.
+   "Food Flow, Inc." = "FOODFLOW INC". The error names the existing code. All creation goes through
+   `src/lib/shippers.ts` (Shippers page, import, seed).
+3. **[ASSUMPTION] "Client" = the shipper.** On a new shipment, typing the shipper's name *or code*
+   fills the shipper, its contact line and a new per-shipment **Pick-up address** from the shipper's
+   default address. CS can overwrite the address for one shipment; "Use the shipper's address" puts it back.
+   Existing shipments got their shipper's default address. The field link and shipment page show it.
+4. **Scripture**: the Psalms and the writings of the apostles and Paul (Matthew, John, Acts, Romans to
+   Hebrews, James, 1–2 Peter, 1–3 John, Jude, Revelation), King James Version (public domain, from
+   github.com/aruljohn/Bible-kjv, MIT). A verse of the day shows under the menu on every page and on the
+   field link; it changes at Manila midnight and cycles through 100 chosen verses. `/scripture` has the
+   full text by book and chapter, and a word search. Mark and Luke (not written by apostles) are left out;
+   add them in `scripts/gen-scripture.mjs` if wanted.
+
+## Pick-up instruction to transport (19-Oct-2026)
+
+1. **New shipment** has a "Cargo and pick-up instruction" section that changes with the cargo type.
+   FCL: booking number, HBL (assigned on save), positioning date/time, container yard, container size
+   (tick 40 / 20 / 40HC / 20 Reefer / 40 Reefer and enter how many), port of loading
+   (MICP/NORTH, SOUTH/ATI, PORT OF BATANGAS, SUBIC), cut-off (date only), remarks.
+   LCL: booking number, HBL, consol, quantity, GW (kg), CBM, description, cargo dimension,
+   delivery warehouse, remarks. Fields for the other cargo type are cleared on save.
+2. **Dates on the instruction** are written `13/NOV/2026 13:00H` (positioning) and `13/NOV/2026` (cut-off), Manila time.
+3. **Transport emails** are saved on the Transport page (AppSetting `TRANSPORT_EMAILS`). When CS create a shipment
+   (form or email intake), the instruction is emailed to all of them right after save. The shipment is saved even if
+   the email fails; the result shows on the shipment page and the timeline, and "Send / Resend to transport" sends it again.
+   Edits resend automatically (see 6).
+4. "SOUT/ATI" in the request is South Harbor (ATI), listed as `SOUTH/ATI` (confirmed by NNR 19-Oct-2026).
+5. **Reefers**: container sizes `20RF` and `40RF` added. In the NNR sheet export, 20RF goes in the 20FT column and 40RF in the 40FT column.
+6. **Subject** (NNR, 19-Oct-2026): `ATW for {shipper} / {booking no.} / {container size} / {HBL}`, e.g.
+   `ATW for Luzon Coco Products Inc. / MAEU123 / 1x40HC / NNRMNLTYOF9905`. Blank parts are left out; LCL shows `LCL 6 PALLETS`.
+   **Revised instructions**: when an edit (or an HBL change) touches anything printed on the instruction and the cargo
+   has not been picked up, the instruction is emailed again with "REVISED" and the time of the previous one at the
+   top of the body, and the subject starts with `REVISED ATW for …` (NNR, 19-Oct-2026). Edits after pick-up do not resend.
+7. **Required for FCL** (NNR, 19-Oct-2026): positioning date/time and port of loading, on new shipments, email-intake
+   confirmation, and edits before pick-up. Not required on the spreadsheet import or after pick-up.
+
+## HBL type, dates, payments and billing (19-Oct-2026)
+
+1. **HBL type** on every shipment: **NNR Consolidation** (NNR's own number, NNRMNL…F/L) or **Direct**. For Direct the
+   booking number *is* the HBL No.: it is required, may only contain letters, digits and dashes, and must not already be
+   another shipment's HBL. Changing the booking number of a Direct shipment changes its HBL (logged as an HBL change).
+   Switching Direct → NNR issues a new NNR number; NNR numbers are never reused. Spreadsheet rows marked DIRECT BL are Direct.
+2. ~~**Cut-off = positioning date** (FCL). It is no longer typed in; it follows the positioning date automatically.~~
+   Replaced 20-Oct-2026: the cut-off is typed in again and must **not** be on a positioning date (see below).
+3. **ETD and ETA are dates only**, stored as 00:00 Manila. A date-only due counts as on time until the end of that day.
+   ETA may be on the ETD date, not before it. Excel shows these as dd-mmm-yyyy.
+4. **New milestones**: 11. E-track paid, 12. Shipping line paid, 13. Billing invoice to customer (with optional invoice no.).
+   They can be recorded after the shipment is closed (billing often comes later), not on cancelled shipments, and a
+   supervisor can revert them.
+5. **Unbilled** tab: every non-cancelled shipment without step 13, split into "Departed, not billed" (with days since ATD;
+   amber from 3 days, red from 7) and "Not yet departed". It shows shipping line payment; E-track and arrastre
+   belong to the reports instead (NNR, 19-Oct-2026, see 6). The menu badge counts departed-not-billed. CS see their own
+   shipments; supervisors see all. Old spreadsheet history is left out.
+
+## Logo and dark mode (19-Oct-2026)
+
+1. NNR logo (`public/nnr-logo.png`) in the header, on the login page and on the field link; `src/app/icon.png` is the
+   browser-tab icon. The logo sits on a light chip so it reads in both themes. Both files load without login.
+2. **Theme switch** (☀️ Light / 🌙 Dark / 💻 System) in the header and on the login page. Default is System (follows
+   Windows). The choice is remembered per browser. Dark mode works by flipping the colour scale in `globals.css`
+   (50↔950, 100↔900, …) rather than restyling each page, so new pages get it automatically. Emails and Excel files
+   are not affected.
+6. **Arrastre and E-track in the reports** (NNR, 19-Oct-2026). Daily: new section "Arrastre and E-track paid (yesterday
+   and today)", and E-track joins the pending list once the cargo is picked up (it has no deadline of its own).
+   Monthly: counts of arrastre and E-track payments made in the month, departures in the month without E-track, and a
+   list of the payments (also a "Payments" sheet in the Excel). The Excel raw sheet has an E-TRACK PAID column.
+
+## Ocean Export Booking Sheet print (19-Oct-2026)
+
+From NNR's "BOOKING SHEET 2024" Excel form. Every shipment has a **🖨️ Booking sheet** button (also offered right
+after creating a shipment) that opens `/shipments/{id}/booking-sheet`: the form laid out like the original on one US Letter
+page, filled from the system. "Print / Save as PDF" opens the browser's print dialog; choosing "Save as PDF" gives the PDF.
+Filled: office, date, PIC (assigned CS), load, HBL (marked DIRECT), booking no., place of loading (MNL + port), port of
+discharge, book date, pick-up, final destination, carrier cut-off (FCL), shipper with address and contact, carrier /
+consolidator, consignee, ETD, onboard (ATD), ETA, transit time, routing, consol warehouse (LCL), commodity, NNR pick-up
+tick, cargo dimension, number of cases/containers, gross weight, CBM, handling (positioning + remarks), billing invoice no.
+Not tracked by the system, so left blank to write in: vessel/voyage, notify, C/vessel, incoterms, tariffs, prepaid/collect,
+PO/SO, IDS, container/seal numbers, VGM, COO, and the transaction and operations checklists.
+Cut-offs on the sheet (NNR, 19-Oct-2026): CARRIER CUT OFF, **FSI CUT OFF**, and one **ED & ARRASTRE CUT OFF** box. That box
+shows the arrastre cut-off (when NNR pays arrastre) and the ED cut-off (export declaration = the BOC portal upload deadline,
+FSI cut-off − 24h unless the rule is changed); one date when they are the same, both (ED … / ARR …) when they differ.
+
+## Commodity, freight terms, Incoterms, vessel (19-Oct-2026)
+
+New shipment fields: **Commodity description** (now for FCL and LCL; it was LCL-only), **Freight** (Prepaid / Collect),
+**Incoterms** (Incoterms 2020 list: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP), **Vessel name** and **Voyage no.**
+All optional. They print on the booking sheet (VESSEL NAME AND VOYAGE#, PREPAID/COLLECT tick, INCOTERMS, COMMODITY) and show on
+the shipment page; the commodity is also on the transport pick-up instruction.
+
+## Booking number → shipping line track & trace (19-Oct-2026)
+
+Clicking a booking number (shipment page, board) opens the shipping line's tracking page in a new tab and copies the
+number. The line is matched from "Shipping line / co-loader" by name or alias. Default list (official pages checked
+19-Oct-2026): Maersk, MSC, CMA CGM, ONE, Evergreen, COSCO, Hapag-Lloyd, Wan Hai, OOCL, Yang Ming. ONE and COSCO take the
+number in the link (`{ref}`), so the result opens directly; the others open their tracking page and CS paste the copied
+number. Supervisors and CS edit the list on **Carriers** (`/carriers`, AppSetting `CARRIER_TRACKING`): add co-loaders,
+other spellings, or a `{ref}` link when a carrier supports one. Only https links are used. Unknown carriers get no link.
+
+## Daily report highlights (19-Oct-2026)
+
+Open items (not yet done) due **today** are highlighted **red** and due **tomorrow** **orange** (Manila days) in the
+overdue, pick-ups, cut-offs and pending sections, on the page, in the Excel download, and marked [DUE TODAY] /
+[DUE TOMORROW] in the email. Departed, payments and missing-data rows are not highlighted (their dates are not due dates).
+
+## Pick-up or consignee delivery, several positioning dates, COO, gross weight (20-Oct-2026)
+
+1. **Cargo arrangement** on every shipment (`cargoArrangement`): **Pick-up by NNR** (default) or **Delivered by
+   consignee**. It is the first line of the instruction and ticks NNR PICK-UP / SHIPPER'S DELIVERY on the booking sheet
+   (until now that tick was guessed from whether a requested pick-up was entered). When the consignee delivers, the
+   instruction is **not emailed to transport**: on create, on edits, and from "Send to transport" (hidden for these
+   shipments). `sendPickupInstruction` returns `not_needed`. If an instruction was already emailed before the switch, the
+   shipment page reminds CS to tell transport the pick-up is off; nothing is emailed automatically.
+2. **Several positioning dates** (FCL): the form starts with one box and "+ Add positioning date" adds more. The earliest
+   stays in `positioningAt` (board, reports, booking sheet header use it unchanged); the others are kept, in time order,
+   in `morePositioningAt` (JSON list of ISO times). The instruction lists them as "Positioning Date and Time 1, 2, …".
+   The same date and time twice is rejected.
+3. **Cut-off is entered again** (FCL, date only) and **must not be on the same Manila day as any positioning date**.
+   It is required wherever positioning is required (new shipments, email intake, edits before pick-up). Shipments saved
+   before this change have cut-off = positioning day, so CS must pick a new cut-off the next time they edit one before pick-up.
+4. **Certificate of Origin**: a tick box (`hasCoo`, FCL and LCL). When ticked, "Certificate of Origin (COO): YES" is on the
+   instruction and in the booking sheet handling notes; when not ticked the line is left out.
+5. **Gross weight** (`grossWeightKg`) now applies to FCL too (it was LCL only) and is on the instruction as GW and on the
+   booking sheet.
+6. Changing the arrangement, positioning dates, cut-off, gross weight or COO before pick-up resends the REVISED instruction
+   (unless the consignee delivers).
+

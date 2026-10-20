@@ -76,6 +76,37 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
         </p>
       </section>
 
+      <section className="card">
+        <h2 className="mb-1 font-semibold">Arrastre and E-track payments</h2>
+        <p className="mb-2 text-sm text-slate-600">
+          <b>{r.payments.arrastrePaid}</b> arrastre and <b>{r.payments.etrackPaid}</b> E-track payments recorded this month.
+          {r.payments.etrackUnpaidDeparted > 0 && (
+            <span className="text-red-700"> {r.payments.etrackUnpaidDeparted} shipment(s) departed this month without E-track paid.</span>
+          )}
+        </p>
+        {r.payments.rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr><th className="py-1 pr-4">Paid</th><th className="pr-4">Payment</th><th className="pr-4">Job No.</th><th className="pr-4">HBL No.</th><th className="pr-4">Shipper</th><th>CS</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {r.payments.rows.map((p, i) => (
+                  <tr key={`${p.shipmentId}-${p.what}-${i}`}>
+                    <td className="whitespace-nowrap py-1.5 pr-4">{formatDateTime(p.paidAt)}</td>
+                    <td className="pr-4">{p.what}</td>
+                    <td className="whitespace-nowrap pr-4 font-mono"><Link href={`/shipments/${p.shipmentId}`} className="text-blue-700 hover:underline">{p.jobNo}</Link></td>
+                    <td className="whitespace-nowrap pr-4 font-mono">{p.hblNo ?? "—"}</td>
+                    <td className="pr-4">{p.shipper}</td>
+                    <td>{p.cs}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Counts title="Missed deadlines by CS" rows={r.missedByCs} empty="No missed deadlines." />
         <Counts title="Missed deadlines by shipper" rows={r.missedByShipper} empty="No missed deadlines." />

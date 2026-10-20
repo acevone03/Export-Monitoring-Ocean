@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { resolveFieldLink } from "@/lib/field-links";
 import { formatDateTime } from "@/lib/time";
+import { containerPlanText } from "@/lib/containers";
+import { verseOfTheDay } from "@/lib/scripture";
 import { FieldActions } from "./FieldActions";
 import { fieldAction } from "./actions";
 
@@ -31,7 +33,7 @@ export default async function FieldPage({ params }: { params: Promise<{ token: s
   const s = link.shipment;
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
-    ? plan.map((c) => `${c.qty} × ${c.size === "40HC" ? "40' HC" : `${c.size}'`}`).join(" + ")
+    ? containerPlanText(plan)
     : `LCL ${s.lclQty ?? "?"} ${s.lclUnit === "BOX" ? "boxes" : "pallets"}`;
 
   const buttons = [
@@ -43,13 +45,16 @@ export default async function FieldPage({ params }: { params: Promise<{ token: s
   return (
     <div className="mx-auto max-w-md space-y-4 text-base">
       <header className="rounded-xl bg-white p-4 shadow-sm">
-        <p className="text-sm text-slate-500">NNR field update{link.assignee ? ` · for ${link.assignee.name}` : ""}</p>
+        <p className="flex items-center gap-2 text-sm text-slate-500">
+          <span className="logo-chip"><img src="/nnr-logo.png" alt="NNR" width={30} height={24} className="h-6 w-auto" /></span>
+          NNR field update{link.assignee ? ` · for ${link.assignee.name}` : ""}
+        </p>
         <h1 className="font-mono text-2xl font-bold">{s.jobNo}</h1>
         <p className="text-lg font-medium">{s.shipper.name}</p>
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[15px]">
           <dt className="text-slate-500">Pick-up</dt>
           <dd>{s.requestedPickupAt ? formatDateTime(s.requestedPickupAt) : "not scheduled"}</dd>
-          {s.shipper.defaultPickupAddress && (<><dt className="text-slate-500">Address</dt><dd>{s.shipper.defaultPickupAddress}</dd></>)}
+          {(s.pickupAddress ?? s.shipper.defaultPickupAddress) && (<><dt className="text-slate-500">Address</dt><dd>{s.pickupAddress ?? s.shipper.defaultPickupAddress}</dd></>)}
           <dt className="text-slate-500">Cargo</dt><dd>{cargo}</dd>
           <dt className="text-slate-500">To</dt><dd>{s.destinationPort}</dd>
         </dl>
@@ -67,7 +72,15 @@ export default async function FieldPage({ params }: { params: Promise<{ token: s
       </section>
 
       <FieldActions action={fieldAction.bind(null, token)} buttons={buttons} />
-      <p className="pb-6 text-center text-xs text-slate-400">Each update is sent to NNR customer service right away.</p>
+      <p className="text-center text-xs text-slate-400">Each update is sent to NNR customer service right away.</p>
+      {(() => {
+        const v = verseOfTheDay(new Date());
+        return (
+          <p className="px-2 pb-6 text-center text-sm text-amber-900">
+            <span className="font-serif italic">{v.text}</span> <span className="whitespace-nowrap font-medium">— {v.ref}</span>
+          </p>
+        );
+      })()}
     </div>
   );
 }

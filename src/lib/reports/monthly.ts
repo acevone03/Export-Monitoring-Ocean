@@ -27,6 +27,7 @@ export type MissedDeadline = {
 };
 
 export type CountRow = { key: string; count: number };
+export type PaymentRow = { shipmentId: string; jobNo: string; hblNo: string | null; shipper: string; cs: string; what: "Arrastre" | "E-track"; paidAt: Date };
 export type OnTimeRow = { deadline: string; onTime: number; late: number; openOverdue: number; total: number; rate: number | null };
 
 export type MonthlyReport = {
@@ -43,6 +44,8 @@ export type MonthlyReport = {
   pickupDelay: { count: number; avgHours: number | null };
   pickupToAtd: { count: number; avgHours: number | null };
   arrastre: { onTime: number; late: number; unpaidOverdue: number };
+  /** Payments recorded in the month, and departures in the month still without E-track. */
+  payments: { arrastrePaid: number; etrackPaid: number; etrackUnpaidDeparted: number; rows: PaymentRow[] };
 };
 
 const HOUR = 3_600_000;
@@ -109,6 +112,20 @@ export function buildMonthlyReport(shipments: ExportShipment[], month: string, n
     else if (due < now) arrastre.unpaidOverdue++;
   }
 
+  const paymentRows: PaymentRow[] = [];
+  for (const s of live) {
+    const row = { shipmentId: s.id, jobNo: s.jobNo, hblNo: s.hblNo, shipper: s.shipper.name, cs: s.assignedCs.name };
+    if (within(s.arrastrePaidAt, period)) paymentRows.push({ ...row, what: "Arrastre", paidAt: s.arrastrePaidAt! });
+    if (within(s.etrackPaidAt, period)) paymentRows.push({ ...row, what: "E-track", paidAt: s.etrackPaidAt! });
+  }
+  paymentRows.sort((a, b) => a.paidAt.getTime() - b.paidAt.getTime() || a.jobNo.localeCompare(b.jobNo));
+  const payments = {
+    arrastrePaid: paymentRows.filter((p) => p.what === "Arrastre").length,
+    etrackPaid: paymentRows.filter((p) => p.what === "E-track").length,
+    etrackUnpaidDeparted: tracked.filter((s) => within(s.atdMnl, period) && !s.etrackPaidAt).length,
+    rows: paymentRows,
+  };
+
   return {
     month,
     label: period.label,
@@ -129,6 +146,7 @@ export function buildMonthlyReport(shipments: ExportShipment[], month: string, n
     pickupDelay: { count: delays.length, avgHours: round1(avg(delays)) },
     pickupToAtd: { count: toAtd.length, avgHours: round1(avg(toAtd)) },
     arrastre,
+    payments,
   };
 }
 
@@ -139,7 +157,7 @@ export function monthlyReportWhere(month: string) {
   return {
     OR: [
       { createdAt: r }, { requestedPickupAt: r }, { fsiCutoffAt: r }, { preadviseCutoffAt: r },
-      { bocDeadlineAt: r }, { arrastreDeadlineAt: r }, { atdMnl: r },
+      { bocDeadlineAt: r }, { arrastreDeadlineAt: r }, { atdMnl: r }, { arrastrePaidAt: r }, { etrackPaidAt: r },
     ],
   };
 }

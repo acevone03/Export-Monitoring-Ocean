@@ -4,14 +4,18 @@ import type { Shipment } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser, can, assertShipmentAccess } from "@/lib/auth";
 import { now as clockNow } from "@/lib/clock";
-import { formatDateTime } from "@/lib/time";
+import { endOfManilaDay, formatDate, formatDateTime } from "@/lib/time";
+import { containerPlanText } from "@/lib/containers";
 import { STATUS_LABEL } from "@/lib/status";
 import { dueState, type DueState } from "@/lib/due";
 import { missingMandatory } from "@/lib/mandatory";
 import { deadlinesMoot } from "@/lib/deadline-status";
 import { describeEvent, SOURCE_LABEL } from "@/lib/event-text";
 import { ActionForm } from "@/components/ActionForm";
-import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction } from "./actions";
+import { milestoneAction, editHblAction, createFieldLinkAction, revokeFieldLinkAction, revertMilestoneAction, sendPickupInstructionAction } from "./actions";
+import { instructionRows, getTransportEmails } from "@/lib/pickup-instruction";
+import { getCarrierLinks, trackingTarget } from "@/lib/tracking";
+import { TrackLink } from "@/components/TrackLink";
 import type { RevertKind } from "@/lib/shipments";
 import { FieldLinkPanel } from "@/components/FieldLinkPanel";
 
@@ -29,11 +33,11 @@ export default async function ShipmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string }>;
+  searchParams: Promise<{ created?: string; pi?: string; revised?: string }>;
 }) {
   const user = await requireUser(["CS", "SUPERVISOR"]);
   const { id } = await params;
-  const { created } = await searchParams;
+  const { created, pi, revised } = await searchParams;
   await assertShipmentAccess(user, id);
   const s = await prisma.shipment
     .findUnique({
@@ -58,26 +62,55 @@ export default async function ShipmentPage({
   const parent = s.partOfHblNo ? await prisma.shipment.findUnique({ where: { hblNo: s.partOfHblNo }, select: { id: true } }) : null;
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
+  const consigneeDelivers = s.cargoArrangement === "CONSIGNEE_DELIVERY";
+  const billable = s.status !== "CANCELLED"; // payments and billing can be recorded after closing
   const missing = missingMandatory(s);
+  const [transportEmails, carriers] = await Promise.all([getTransportEmails(prisma), getCarrierLinks(prisma)]);
+  const lastInstruction = s.events.find((e) => e.type === "PICKUP_INSTRUCTION_SENT" || e.type === "PICKUP_INSTRUCTION_FAILED");
   const moot = deadlinesMoot(s);
   // Supervisors can undo a step recorded by mistake (logged, nothing deleted).
   const rv = (kind: RevertKind) => (user.role === "SUPERVISOR" ? <RevertForm shipmentId={s.id} kind={kind} /> : null); // after departure / cancel / close, open deadlines no longer turn red
   const plan = (s.containerPlan as Array<{ size: string; qty: number }> | null) ?? [];
   const cargo = s.cargoType === "FCL"
-    ? `FCL ${plan.map((c) => `${c.qty}×${c.size === "40HC" ? "40'HC" : `${c.size}'`}`).join(" + ")}`
+    ? `FCL ${containerPlanText(plan)}`
     : `LCL ${s.lclQty ?? "?"} ${s.lclUnit === "BOX" ? "boxes" : "pallets"}`;
 
   return (
     <div className="space-y-6">
       {created && (
         <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
-          Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.
+          Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.{" "}
+          <a href={`/shipments/${s.id}/booking-sheet`} target="_blank" rel="noopener" className="font-medium underline">Print booking sheet (PDF)</a>.
+          {pi === "sent" && <> Pick-up instruction emailed to transport ({transportEmails.join(", ")}).</>}
+          {pi === "not_needed" && <> Delivered by consignee, so no pick-up instruction was emailed to transport.</>}
+        </div>
+      )}
+      {revised && pi === "sent" && (
+        <div className="rounded-md border border-green-300 bg-green-50 px-4 py-2 text-sm text-green-900">
+          Saved. The pick-up instruction details changed, so the revised instruction was emailed to transport ({transportEmails.join(", ")}).
+        </div>
+      )}
+      {revised && pi === "not_needed" && (
+        <div className="rounded-md border border-slate-300 bg-slate-50 px-4 py-2 text-sm text-slate-800">
+          Saved. Delivered by consignee, so nothing was emailed to transport.
+        </div>
+      )}
+      {(created || revised) && pi === "no_recipients" && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          Pick-up instruction was not sent: no transport email is saved. <Link href="/transport" className="underline">Add one under Transport</Link>, then use “Send to transport” below.
+        </div>
+      )}
+      {(created || revised) && pi === "failed" && (
+        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-900">
+          Pick-up instruction could not be emailed (see the timeline). Use “Send to transport” below to try again.
         </div>
       )}
 
       <header className="flex flex-wrap items-start gap-x-6 gap-y-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">HBL No.</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            HBL No. · {s.hblType === "DIRECT" ? "Direct (booking no.)" : "NNR Consolidation"}
+          </p>
           <h1 className="font-mono text-2xl font-semibold">{s.hblNo ?? (/DIRECT BL/i.test(s.carrierRemarks ?? "") ? "DIRECT BL" : "(no HBL)")}</h1>
         </div>
         <div>
@@ -90,6 +123,7 @@ export default async function ShipmentPage({
         </div>
         <div className="ml-auto flex gap-2">
           <Link href="/" className="btn-secondary">Back to board</Link>
+          <a href={`/shipments/${s.id}/booking-sheet`} target="_blank" rel="noopener" className="btn-secondary">🖨️ Booking sheet</a>
           {open && <Link href={`/shipments/${s.id}/edit`} className="btn">Edit details</Link>}
         </div>
       </header>
@@ -116,20 +150,33 @@ export default async function ShipmentPage({
         <section className="card lg:col-span-2">
           <h2 className="mb-3 font-semibold">Details</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-            <Row k="Shipper" v={s.shipper.name} />
+            <Row k="Shipper" v={`${s.shipper.code} · ${s.shipper.name}`} />
+            <Row k="Pick-up address" v={s.pickupAddress ?? s.shipper.defaultPickupAddress} />
             <Row k="Consignee" v={s.consigneeName} />
             <Row k="Destination" v={s.destinationPort} />
             <Row k="POD" v={s.pod} />
             <Row k="Cargo" v={cargo} />
             <Row k="Shipping line / co-loader" v={s.carrierName} />
-            <Row k="Booking no." v={s.carrierBookingRef} mono />
+            <Row k="Vessel / voyage" v={[s.vesselName, s.voyageNo ? `V.${s.voyageNo}` : null].filter(Boolean).join(" ") || null} />
+            <Row k="Freight / Incoterms" v={[s.freightTerms === "PREPAID" ? "Prepaid" : s.freightTerms === "COLLECT" ? "Collect" : null, s.incoterm].filter(Boolean).join(" · ") || null} />
+            <dt className="text-slate-500">Booking no.</dt>
+            <dd>
+              {s.carrierBookingRef ? (
+                <>
+                  <TrackLink refNo={s.carrierBookingRef} target={trackingTarget(carriers, s.carrierName, s.carrierBookingRef)} className="font-mono" />
+                  {!trackingTarget(carriers, s.carrierName, s.carrierBookingRef) && s.carrierName && (
+                    <Link href="/carriers" className="ml-2 text-xs text-slate-500 hover:underline">add a tracking link for {s.carrierName}</Link>
+                  )}
+                </>
+              ) : <span className="text-slate-400">—</span>}
+            </dd>
             <Row k="Remarks" v={s.carrierRemarks} />
             <Row k="Requested pick-up" v={formatDateTime(s.requestedPickupAt)} />
             <Row k="FSI cut-off" v={formatDateTime(s.fsiCutoffAt)} />
             <Row k="Pre-advise cut-off" v={formatDateTime(s.preadviseCutoffAt)} />
             <Row k="Arrastre cut-off" v={s.arrastreResponsibility === "NNR" ? formatDateTime(s.arrastreCutoffAt) : "n/a (shipper)"} />
-            <Row k="ETD MNL" v={formatDateTime(s.etdMnl)} />
-            <Row k="ETA" v={formatDateTime(s.eta)} />
+            <Row k="ETD MNL" v={formatDate(s.etdMnl)} />
+            <Row k="ETA" v={formatDate(s.eta)} />
             <Row k="Arrastre by" v={s.arrastreResponsibility === "NNR" ? "NNR" : "Shipper"} />
             <Row k="Declaration c/o" v={`${s.declarationBy === "NNR" ? "NNR" : "Shipper"}${s.declarationForwarder ? ` (${s.declarationForwarder})` : ""}`} />
             <Row k="HBL destination code" v={s.podCode} mono />
@@ -220,18 +267,38 @@ export default async function ShipmentPage({
           <Step label="8. Docs sent to overseas office" due={null} done={s.exportDocsToOverseasAt} now={now} keepOpen revert={rv("DOCS_TO_OVERSEAS")}>
             {open && <TimedAction s={s} kind="DOCS_TO_OVERSEAS" button="Mark sent" />}
           </Step>
-          <Step label="9. Departed (ATD MNL)" due={s.etdMnl} done={s.atdMnl} now={now} dueLabel="ETD" revert={rv("DEPARTED")}>
+          <Step label="9. Departed (ATD MNL)" due={endOfManilaDay(s.etdMnl)} done={s.atdMnl} now={now} dueLabel="ETD" dateOnly revert={rv("DEPARTED")}>
             {open && !s.atdMnl && (
               <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
                 <Hidden s={s} kind="DEPARTED" />
                 <WhenInput label="ATD" />
-                <label className="text-xs text-slate-600">ETA <input type="datetime-local" name="eta" className="input inline-block w-auto py-1" /></label>
+                <label className="text-xs text-slate-600">ETA <input type="date" name="eta" className="input inline-block w-auto py-1" /></label>
                 <button className="btn-secondary py-1">Mark departed</button>
               </ActionForm>
             )}
           </Step>
-          <Step label="10. Arrived (ATA)" due={s.eta} done={s.ata} now={now} dueLabel="ETA" passive={!s.atdMnl} revert={rv("ARRIVED")}>
+          <Step label="10. Arrived (ATA)" due={endOfManilaDay(s.eta)} done={s.ata} now={now} dueLabel="ETA" dateOnly passive={!s.atdMnl} revert={rv("ARRIVED")}>
             {open && s.atdMnl && <TimedAction s={s} kind="ARRIVED" button="Mark arrived" whenLabel="ATA" />}
+          </Step>
+
+          <h3 className="pt-2 text-sm font-semibold text-slate-700">Payments and billing</h3>
+          <Step label="11. E-track paid" due={null} done={s.etrackPaidAt} now={now} revert={rv("ETRACK_PAID")}>
+            {billable && <TimedAction s={s} kind="ETRACK_PAID" button="Mark E-track paid" />}
+          </Step>
+          <Step label="12. Shipping line paid" due={null} done={s.shippingLinePaidAt} now={now} revert={rv("SHIPPING_LINE_PAID")}>
+            {billable && <TimedAction s={s} kind="SHIPPING_LINE_PAID" button="Mark shipping line paid" />}
+          </Step>
+          <Step label="13. Billing invoice to customer" due={null} done={s.invoicedAt} now={now} keepOpen revert={rv("INVOICED")}>
+            {s.invoicedAt ? (
+              s.invoiceNo && <p className="text-xs text-slate-600">Invoice no. {s.invoiceNo}</p>
+            ) : billable && (
+              <ActionForm action={milestoneAction} className="flex flex-wrap items-center gap-2">
+                <Hidden s={s} kind="INVOICED" />
+                <input name="invoiceNo" placeholder="Invoice no. (optional)" maxLength={50} className="input w-44 py-1" />
+                <WhenInput />
+                <button className="btn-secondary py-1">Mark billed</button>
+              </ActionForm>
+            )}
           </Step>
 
           {open && (
@@ -299,6 +366,41 @@ export default async function ShipmentPage({
       </div>
 
       <section className="card">
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="font-semibold">Pick-up instruction ({s.cargoType})</h2>
+          <p className="text-sm text-slate-600">
+            {consigneeDelivers
+              ? "Delivered by consignee: not emailed to transport."
+              : s.pickupInstructionSentAt
+                ? `Last emailed to transport ${formatDateTime(s.pickupInstructionSentAt)}.`
+                : "Not emailed to transport yet."}
+            {!consigneeDelivers && lastInstruction?.type === "PICKUP_INSTRUCTION_FAILED" && <span className="ml-1 text-red-700">Last attempt failed.</span>}
+          </p>
+          {consigneeDelivers && s.pickupInstructionSentAt && !s.actualPickupAt && (
+            <p className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Transport was sent a pick-up instruction on {formatDateTime(s.pickupInstructionSentAt)}. Let them know the pick-up is no longer needed.
+            </p>
+          )}
+          {open && !consigneeDelivers && (
+            <ActionForm action={sendPickupInstructionAction} className="ml-auto flex flex-wrap items-center gap-2">
+              <input type="hidden" name="shipmentId" value={s.id} />
+              <span className="text-xs text-slate-500">
+                To: {transportEmails.length ? transportEmails.join(", ") : <Link href="/transport" className="text-blue-700 underline">add transport email</Link>}
+              </span>
+              <button className="btn-secondary py-1" disabled={transportEmails.length === 0}>
+                {s.pickupInstructionSentAt ? "Resend to transport" : "Send to transport"}
+              </button>
+            </ActionForm>
+          )}
+        </div>
+        <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+          {instructionRows(s).map(([k, v]) => (
+            <Row key={k} k={k} v={v || null} />
+          ))}
+        </dl>
+      </section>
+
+      <section className="card">
         <h2 className="mb-3 font-semibold">Timeline</h2>
         <ol className="space-y-2 text-sm">
           {s.events.map((e) => (
@@ -344,7 +446,7 @@ function Row({ k, v, mono }: { k: string; v: string | null | undefined; mono?: b
 }
 
 function Step({
-  label, due, done, now, rule, dueLabel = "Due", passive, keepOpen, revert, children,
+  label, due, done, now, rule, dueLabel = "Due", dateOnly, passive, keepOpen, revert, children,
 }: {
   label: string;
   due: Date | null;
@@ -352,6 +454,8 @@ function Step({
   now: Date;
   rule?: string;
   dueLabel?: string;
+  /** Due is a whole day (ETD, ETA): show the date only. */
+  dateOnly?: boolean;
   passive?: boolean;
   keepOpen?: boolean;
   revert?: React.ReactNode;
@@ -364,7 +468,7 @@ function Step({
         <span className="font-medium">{label}</span>
         <span className="text-xs">{DUE_TEXT[state]}</span>
         <span className="ml-auto text-xs text-slate-600">
-          {due && <>{dueLabel} {formatDateTime(due)}{rule && <span className="text-slate-400"> ({rule})</span>}</>}
+          {due && <>{dueLabel} {dateOnly ? formatDate(due) : formatDateTime(due)}{rule && <span className="text-slate-400"> ({rule})</span>}</>}
           {done instanceof Date && <> · Done {formatDateTime(done)}</>}
         </span>
       </div>

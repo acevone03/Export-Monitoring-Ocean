@@ -17,6 +17,8 @@ export type DailyItem = {
   at: Date | null; // due time, or event time for "departed"
   doneAt: Date | null;
   detail?: string;
+  /** Not done and due today (red) or tomorrow (orange), Manila days. Only for sections whose time is a due time. */
+  dueTag?: "today" | "tomorrow";
 };
 
 export type DailySection = { key: string; title: string; tone: "red" | "normal"; items: DailyItem[] };
@@ -60,6 +62,16 @@ export function buildDailyReport(shipments: ExportShipment[], now: Date): DailyR
   for (const s of open.filter((x) => !deadlinesMoot(x))) {
     if (!s.bocUploadAt) pending.push({ ...base(s), what: "BOC portal upload", at: s.bocDeadlineAt, doneAt: null });
     if (s.arrastreResponsibility === "NNR" && !s.arrastrePaidAt) pending.push({ ...base(s), what: "Arrastre payment", at: s.arrastreDeadlineAt, doneAt: null });
+    // E-track has no deadline of its own: listed once the cargo is picked up, until it is paid.
+    if (s.actualPickupAt && !s.etrackPaidAt) pending.push({ ...base(s), what: "E-track payment", at: null, doneAt: null });
+  }
+
+  // Payments recorded yesterday or today (any shipment that is not cancelled, closed ones included).
+  const twoDaysBack = { start: yesterday.start, end: today.end };
+  const payments: DailyItem[] = [];
+  for (const s of live) {
+    if (within(s.arrastrePaidAt, twoDaysBack)) payments.push({ ...base(s), what: "Arrastre paid", at: s.arrastrePaidAt, doneAt: s.arrastrePaidAt });
+    if (within(s.etrackPaidAt, twoDaysBack)) payments.push({ ...base(s), what: "E-track paid", at: s.etrackPaidAt, doneAt: s.etrackPaidAt });
   }
 
   const departed = live
@@ -71,6 +83,17 @@ export function buildDailyReport(shipments: ExportShipment[], now: Date): DailyR
     .filter(({ m }) => m.length > 0)
     .map(({ s, m }) => ({ ...base(s), what: "Missing data", at: s.etdMnl, doneAt: null, detail: m.join(", ") }));
 
+  // Highlight what is still open and due today (red) or tomorrow (orange).
+  const tag = (items: DailyItem[]) => {
+    for (const i of items) {
+      if (i.doneAt || !i.at) continue;
+      if (within(i.at, today)) i.dueTag = "today";
+      else if (within(i.at, tomorrow)) i.dueTag = "tomorrow";
+    }
+    return items;
+  };
+  [overdue, pickups, cutoffs, pending].forEach(tag);
+
   return {
     date: formatDate(now),
     generatedAt: now,
@@ -78,7 +101,8 @@ export function buildDailyReport(shipments: ExportShipment[], now: Date): DailyR
       { key: "overdue", title: "Overdue items", tone: "red", items: overdue.sort(byTime) },
       { key: "pickups", title: "Pick-ups today and tomorrow", tone: "normal", items: pickups.sort(byTime) },
       { key: "cutoffs", title: "Cut-offs due today (FSI, pre-advise)", tone: "normal", items: cutoffs.sort(byTime) },
-      { key: "pending", title: "Pending BOC uploads and arrastre payments", tone: "normal", items: pending.sort(byTime) },
+      { key: "pending", title: "Pending BOC uploads, arrastre and E-track payments", tone: "normal", items: pending.sort(byTime) },
+      { key: "payments", title: "Arrastre and E-track paid (yesterday and today)", tone: "normal", items: payments.sort(byTime) },
       { key: "departed", title: "Departed yesterday", tone: "normal", items: departed.sort(byTime) },
       { key: "missing", title: "Shipments with missing mandatory data", tone: "normal", items: missing.sort(byTime) },
     ],
@@ -89,6 +113,12 @@ export function buildDailyReport(shipments: ExportShipment[], now: Date): DailyR
 export function dailyReportWhere(now: Date) {
   return {
     status: { not: "CANCELLED" as const },
-    OR: [{ status: { not: "CLOSED" as const } }, { atdMnl: { gte: manilaDay(now, -1).start } }],
+    OR: [
+      { status: { not: "CLOSED" as const } },
+      { atdMnl: { gte: manilaDay(now, -1).start } },
+      // Payments can be recorded after a shipment is closed.
+      { arrastrePaidAt: { gte: manilaDay(now, -1).start } },
+      { etrackPaidAt: { gte: manilaDay(now, -1).start } },
+    ],
   };
 }
