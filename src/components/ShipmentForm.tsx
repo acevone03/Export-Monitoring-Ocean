@@ -48,14 +48,18 @@ export type ShipmentFormValues = {
   declarationBy: "NNR" | "SHIPPER";
   declarationForwarder: string;
   partOfHblNo: string;
-  // Pick-up instruction (sent to transport). FCL:
-  positioningAt: string; // datetime-local, Manila
+  // Pick-up instruction (sent to transport unless the consignee delivers).
+  cargoArrangement: "NNR_PICKUP" | "CONSIGNEE_DELIVERY";
+  hasCoo: boolean; // Certificate of Origin
+  // FCL:
+  positioningAt: string; // datetime-local, Manila (first box)
+  morePositioningAt: string[]; // further boxes, datetime-local
   containerYard: string;
   portOfLoading: string;
-  cyCutoffAt: string; // date (YYYY-MM-DD)
+  cyCutoffAt: string; // date (YYYY-MM-DD), never the same day as a positioning date
+  grossWeightKg: string; // FCL and LCL
   // LCL:
   consolidator: string;
-  grossWeightKg: string;
   cbm: string;
   cargoDescription: string;
   cargoDimensions: string;
@@ -124,7 +128,15 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
   const containers: Container[] = CONTAINER_SIZES.filter((z) => qtyBySize[z] > 0).map((z) => ({ size: z, qty: qtyBySize[z] }));
   const [hblType, setHblType] = useState<"NNR" | "DIRECT">((v("hblType") as "NNR" | "DIRECT") || "NNR");
   const [booking, setBooking] = useState(v("carrierBookingRef"));
-  const [positioningPreview, setPositioningPreview] = useState(v("positioningAt"));
+  const [arrangement, setArrangement] = useState(initial.cargoArrangement);
+  const [hasCoo, setHasCoo] = useState(initial.hasCoo);
+  // Positioning boxes: the first is required for FCL, "Add positioning date" adds more.
+  const [positions, setPositions] = useState<string[]>(() => [initial.positioningAt, ...initial.morePositioningAt]);
+  const [cutoff, setCutoff] = useState(v("cyCutoffAt"));
+  const setPosition = (i: number, value: string) => setPositions(positions.map((p, j) => (j === i ? value : p)));
+  const filledPositions = positions.filter(Boolean);
+  // Cut-off and positioning must be on different days; datetime-local values start with the Manila date.
+  const cutoffClash = cutoff ? filledPositions.find((p) => p.slice(0, 10) === cutoff) : undefined;
 
   function pickShipper(typed: string) {
     const t = typed.trim().toLowerCase();
@@ -149,6 +161,7 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
     >
       <input type="hidden" name="shipperId" value={shipperId} />
       <input type="hidden" name="containerPlan" value={cargoType === "FCL" ? JSON.stringify(containers) : "[]"} />
+      <input type="hidden" name="morePositioningAt" value={cargoType === "FCL" ? JSON.stringify(positions.slice(1).filter(Boolean)) : "[]"} />
 
       <Section title="Booking">
         <Field label="Shipper" error={err.shipperId} flag={flags.shipperId} span={2}>
@@ -235,7 +248,22 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
         </datalist>
       </Section>
 
-      <Section title="Cargo and pick-up instruction (sent to transport)">
+      <Section title={arrangement === "CONSIGNEE_DELIVERY" ? "Cargo and delivery instruction (consignee delivers, not sent to transport)" : "Cargo and pick-up instruction (sent to transport)"}>
+        <Field label="Cargo arrangement" error={err.cargoArrangement} span={3}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="cargoArrangement" value="NNR_PICKUP" checked={arrangement === "NNR_PICKUP"} onChange={() => setArrangement("NNR_PICKUP")} /> Pick-up by NNR
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" name="cargoArrangement" value="CONSIGNEE_DELIVERY" checked={arrangement === "CONSIGNEE_DELIVERY"} onChange={() => setArrangement("CONSIGNEE_DELIVERY")} /> Delivered by consignee
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {arrangement === "CONSIGNEE_DELIVERY"
+              ? "The consignee brings the cargo, so no email goes to the transport team. The instruction still shows on the shipment."
+              : "The pick-up instruction is emailed to the transport team when you save."}
+          </p>
+        </Field>
         <Field label="Cargo type" error={err.cargoType} flag={flags.cargoType}>
           <select className="input" name="cargoType" value={cargoType} onChange={(e) => setCargoType(e.target.value as "FCL" | "LCL")}>
             <option value="FCL">FCL</option>
@@ -292,9 +320,41 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
 
         {cargoType === "FCL" ? (
           <>
-            <Field label={`Positioning date and time${requireInstruction ? " *" : ""}`} error={err.positioningAt}>
-              <input className="input" type="datetime-local" name="positioningAt" required={requireInstruction} defaultValue={v("positioningAt")} onChange={(e) => setPositioningPreview(e.target.value)} />
-              {positioningPreview && <p className="mt-1 font-mono text-xs text-slate-500">{formatInstructionDateTime(parseManilaInput(positioningPreview))}</p>}
+            <Field label={`Positioning date and time${requireInstruction ? " *" : ""}`} error={err.positioningAt ?? err.morePositioningAt} span={2}>
+              <div className="space-y-2">
+                {positions.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-right text-xs tabular-nums text-slate-500">{i + 1}</span>
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      name={i === 0 ? "positioningAt" : undefined}
+                      required={i === 0 && requireInstruction}
+                      value={p}
+                      aria-label={`Positioning date and time ${i + 1}`}
+                      onChange={(e) => setPosition(i, e.target.value)}
+                    />
+                    {positions.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn-secondary shrink-0 px-2.5 py-1"
+                        aria-label={`Remove positioning date ${i + 1}`}
+                        onClick={() => setPositions(positions.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="mt-2 text-sm font-medium text-blue-700 hover:underline" onClick={() => setPositions([...positions, ""])}>
+                + Add positioning date
+              </button>
+              {filledPositions.length > 0 && (
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {[...filledPositions].sort().map((p) => formatInstructionDateTime(parseManilaInput(p))).join(" · ")}
+                </p>
+              )}
             </Field>
             <Field label="Container yard" error={err.containerYard}>
               <input className="input" name="containerYard" defaultValue={v("containerYard")} placeholder="Where to get the empty" />
@@ -304,11 +364,6 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
                 <option value="">Choose…</option>
                 {PORTS_OF_LOADING.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-            </Field>
-            <Field label="Cut-off time (same as positioning date)">
-              <p className="input bg-slate-50 font-mono text-slate-600">
-                {positioningPreview ? formatInstructionDate(parseManilaInput(positioningPreview)) : "Follows the positioning date"}
-              </p>
             </Field>
             <Field label="Container size (tick and enter how many)" error={err.containerPlan} flag={flags.containerPlan} span={3}>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -343,6 +398,17 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
                 <p className="mt-1 text-xs text-slate-600">{containers.map((c) => `${c.qty}x${CONTAINER_LABEL[c.size]}`).join(" + ")}</p>
               )}
             </Field>
+            <Field label={`Cut-off date${requireInstruction ? " *" : ""}`} error={err.cyCutoffAt}>
+              <input className="input" type="date" name="cyCutoffAt" required={requireInstruction} value={cutoff} onChange={(e) => setCutoff(e.target.value)} />
+              {cutoffClash ? (
+                <p className="mt-1 text-xs text-red-700">Same day as positioning {formatInstructionDate(parseManilaInput(cutoffClash))}. Pick a different day.</p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">Must not be on a positioning date.</p>
+              )}
+            </Field>
+            <Field label="Gross weight (kg)" error={err.grossWeightKg}>
+              <input className="input" type="number" min={0} step="any" name="grossWeightKg" defaultValue={v("grossWeightKg")} placeholder="e.g. 18500" />
+            </Field>
           </>
         ) : (
           <>
@@ -372,7 +438,12 @@ export function ShipmentForm({ action, initial, shippers, csUsers, destinations,
             </Field>
           </>
         )}
-        <Field label="Remarks (for transport)" error={err.pickupRemarks} span={cargoType === "FCL" ? 1 : 2}>
+        <Field label="Certificate of Origin" error={err.hasCoo}>
+          <label className="flex h-[38px] items-center gap-2 text-sm">
+            <input type="checkbox" name="hasCoo" checked={hasCoo} onChange={(e) => setHasCoo(e.target.checked)} /> COO goes with this shipment
+          </label>
+        </Field>
+        <Field label="Remarks (for transport)" error={err.pickupRemarks} span={2}>
           <textarea className="input" rows={2} name="pickupRemarks" defaultValue={v("pickupRemarks")} />
         </Field>
       </Section>

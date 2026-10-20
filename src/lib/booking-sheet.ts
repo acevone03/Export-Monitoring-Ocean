@@ -1,5 +1,6 @@
 import type { Shipment, Shipper } from "@prisma/client";
 import { containerPlanText } from "./containers";
+import { positioningDates } from "./positioning";
 import { formatDate, formatDateTime, formatInstructionDate, formatInstructionDateTime } from "./time";
 
 // Ocean Export Booking Sheet: NNR's paper form (BOOKING SHEET 2024), printed from a shipment.
@@ -105,14 +106,18 @@ export function bookingSheetData(s: BookingSheetShipment, printedAt: Date): Book
     collect: s.freightTerms === "COLLECT",
     incoterm: s.incoterm ?? "",
     invoiceNo: "",
-    nnrPickup: !!s.requestedPickupAt,
-    shipperDelivery: !s.requestedPickupAt,
+    // "Delivered by consignee" on the form ticks the paper form's delivery box.
+    nnrPickup: s.cargoArrangement !== "CONSIGNEE_DELIVERY",
+    shipperDelivery: s.cargoArrangement === "CONSIGNEE_DELIVERY",
     cargoDimensions: s.cargoDimensions ?? "",
     numberOfCases: fcl ? plan : qty,
     grossWeight: num(s.grossWeightKg, "KGS"),
     cbm: num(s.cbm, "CBM"),
     handling: [
-      fcl && s.positioningAt ? `Positioning: ${formatInstructionDateTime(s.positioningAt)}${s.containerYard ? ` at ${s.containerYard}` : ""}` : null,
+      fcl && s.positioningAt
+        ? `Positioning: ${positioningDates(s).map(formatInstructionDateTime).join(", ")}${s.containerYard ? ` at ${s.containerYard}` : ""}`
+        : null,
+      s.hasCoo ? "Certificate of Origin (COO): YES" : null,
       s.pickupRemarks,
       s.carrierRemarks,
     ].filter((x): x is string => !!x),

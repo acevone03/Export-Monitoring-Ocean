@@ -187,6 +187,7 @@ export async function sendPickupInstructionAction(_prev: ActionState, form: Form
   await assertShipmentAccess(user, shipmentId.data);
   const r = await sendPickupInstruction(prisma, shipmentId.data, user.id, await now());
   revalidatePath(`/shipments/${shipmentId.data}`);
+  if (r.status === "not_needed") return { error: "Delivered by consignee: there is nothing to send to transport." };
   if (r.status === "no_recipients") return { error: "No transport email saved yet. Add one under Transport first." };
   if (r.status === "failed") return { error: `Not sent: ${r.error}` };
   return { ok: `Sent to ${r.to.join(", ")}` };

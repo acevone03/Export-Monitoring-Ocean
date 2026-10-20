@@ -32,6 +32,13 @@ enum CargoType {
   LCL
 }
 
+// Who brings the cargo: NNR's trucker picks it up (pick-up instruction emailed to transport), or the
+// consignee delivers it themselves (no email to transport).
+enum CargoArrangement {
+  NNR_PICKUP
+  CONSIGNEE_DELIVERY
+}
+
 enum LclUnit {
   PALLET
   BOX
@@ -238,14 +245,17 @@ model Shipment {
 
   // Pick-up instruction sent to the transport (trucking) company. FCL and LCL use different fields;
   // the form clears the ones that do not apply to the cargo type.
+  cargoArrangement  CargoArrangement @default(NNR_PICKUP)
   // FCL: empty-container positioning, container yard, port of loading, cut-off (date only).
-  positioningAt     DateTime?
+  positioningAt     DateTime? // earliest positioning date and time
+  morePositioningAt Json?     // further positioning date-times (ISO strings, ascending), one per extra box on the form
   containerYard     String?
   portOfLoading     String?   // MICP/NORTH | SOUTH/ATI | PORT OF BATANGAS | SUBIC (see PORTS_OF_LOADING)
-  cyCutoffAt        DateTime? // date only, stored as Manila midnight
-  // LCL: consolidator, weight, volume, description, dimensions, warehouse to deliver to.
+  cyCutoffAt        DateTime? // date only, stored as Manila midnight; never the same day as a positioning date
+  // LCL: consolidator, volume, description, dimensions, warehouse to deliver to.
   consolidator      String?
-  grossWeightKg     Float?
+  grossWeightKg     Float?    // FCL and LCL
+  hasCoo            Boolean   @default(false) // Certificate of Origin goes with the shipment (FCL and LCL)
   cbm               Float?
   cargoDescription  String?   // commodity description (FCL and LCL)
   cargoDimensions   String?

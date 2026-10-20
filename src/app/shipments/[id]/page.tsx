@@ -62,6 +62,7 @@ export default async function ShipmentPage({
   const parent = s.partOfHblNo ? await prisma.shipment.findUnique({ where: { hblNo: s.partOfHblNo }, select: { id: true } }) : null;
   const fieldUsers = await prisma.user.findMany({ where: { role: "FIELD", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true } });
   const open = s.status !== "CLOSED" && s.status !== "CANCELLED";
+  const consigneeDelivers = s.cargoArrangement === "CONSIGNEE_DELIVERY";
   const billable = s.status !== "CANCELLED"; // payments and billing can be recorded after closing
   const missing = missingMandatory(s);
   const [transportEmails, carriers] = await Promise.all([getTransportEmails(prisma), getCarrierLinks(prisma)]);
@@ -81,11 +82,17 @@ export default async function ShipmentPage({
           Shipment created. Job No. <b className="font-mono">{s.jobNo}</b>, HBL No. <b className="font-mono">{s.hblNo}</b>.{" "}
           <a href={`/shipments/${s.id}/booking-sheet`} target="_blank" rel="noopener" className="font-medium underline">Print booking sheet (PDF)</a>.
           {pi === "sent" && <> Pick-up instruction emailed to transport ({transportEmails.join(", ")}).</>}
+          {pi === "not_needed" && <> Delivered by consignee, so no pick-up instruction was emailed to transport.</>}
         </div>
       )}
       {revised && pi === "sent" && (
         <div className="rounded-md border border-green-300 bg-green-50 px-4 py-2 text-sm text-green-900">
           Saved. The pick-up instruction details changed, so the revised instruction was emailed to transport ({transportEmails.join(", ")}).
+        </div>
+      )}
+      {revised && pi === "not_needed" && (
+        <div className="rounded-md border border-slate-300 bg-slate-50 px-4 py-2 text-sm text-slate-800">
+          Saved. Delivered by consignee, so nothing was emailed to transport.
         </div>
       )}
       {(created || revised) && pi === "no_recipients" && (
@@ -362,12 +369,19 @@ export default async function ShipmentPage({
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="font-semibold">Pick-up instruction ({s.cargoType})</h2>
           <p className="text-sm text-slate-600">
-            {s.pickupInstructionSentAt
-              ? `Last emailed to transport ${formatDateTime(s.pickupInstructionSentAt)}.`
-              : "Not emailed to transport yet."}
-            {lastInstruction?.type === "PICKUP_INSTRUCTION_FAILED" && <span className="ml-1 text-red-700">Last attempt failed.</span>}
+            {consigneeDelivers
+              ? "Delivered by consignee: not emailed to transport."
+              : s.pickupInstructionSentAt
+                ? `Last emailed to transport ${formatDateTime(s.pickupInstructionSentAt)}.`
+                : "Not emailed to transport yet."}
+            {!consigneeDelivers && lastInstruction?.type === "PICKUP_INSTRUCTION_FAILED" && <span className="ml-1 text-red-700">Last attempt failed.</span>}
           </p>
-          {open && (
+          {consigneeDelivers && s.pickupInstructionSentAt && !s.actualPickupAt && (
+            <p className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Transport was sent a pick-up instruction on {formatDateTime(s.pickupInstructionSentAt)}. Let them know the pick-up is no longer needed.
+            </p>
+          )}
+          {open && !consigneeDelivers && (
             <ActionForm action={sendPickupInstructionAction} className="ml-auto flex flex-wrap items-center gap-2">
               <input type="hidden" name="shipmentId" value={s.id} />
               <span className="text-xs text-slate-500">

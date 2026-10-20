@@ -27,6 +27,7 @@ const ship = (o: Partial<Shipment> & { shipperName?: string; csName?: string } =
     status: "PICKUP_SCHEDULED", cargoType: "FCL", containerPlan: [{ size: "40HC", qty: 1 }], lclQty: null, lclUnit: null,
     destinationPort: "USLAX Los Angeles", pod: "USLGB", consigneeName: null, pickupAddress: null,
     positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null, consolidator: null, grossWeightKg: null, cbm: null,
+    cargoArrangement: "NNR_PICKUP", morePositioningAt: null, hasCoo: false,
     cargoDescription: null, cargoDimensions: null, deliveryWarehouse: null, pickupRemarks: null, pickupInstructionSentAt: null,
     vesselName: null, voyageNo: null, freightTerms: null, incoterm: null,
     hblType: "NNR", etrackPaidAt: null, shippingLinePaidAt: null, invoicedAt: null, invoiceNo: null, carrierName: "Maersk", carrierBookingRef: "B1",

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createShipment, type Actor } from "@/lib/shipments";
 import { parseShipmentForm } from "@/lib/shipment-input";
-import { buildInstructionMail, getTransportEmails, instructionChanges, parseEmailList, sendPickupInstruction, setTransportEmails } from "@/lib/pickup-instruction";
+import { buildInstructionMail, getTransportEmails, instructionChanges, instructionRows, parseEmailList, sendPickupInstruction, setTransportEmails } from "@/lib/pickup-instruction";
 import { formatInstructionDate, formatInstructionDateTime, fromManila } from "@/lib/time";
 import { prisma, fixtures, input } from "./helpers";
 
@@ -44,16 +44,17 @@ describe("pick-up instruction fields", () => {
   it("reads the FCL fields, including reefers, and drops the LCL ones", () => {
     const r = parseShipmentForm(form({
       containerPlan: JSON.stringify([{ size: "20RF", qty: "2" }, { size: "40", qty: "1" }]),
-      positioningAt: "2026-11-13T13:00", containerYard: "NYK CY Pasig", portOfLoading: "MICP/NORTH", cyCutoffAt: "2026-11-13",
+      positioningAt: "2026-11-13T13:00", containerYard: "NYK CY Pasig", portOfLoading: "MICP/NORTH", cyCutoffAt: "2026-11-15",
       grossWeightKg: "1200", cbm: "4.5", pickupRemarks: "Genset needed",
     }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.data.containerPlan).toEqual([{ size: "20RF", qty: 2 }, { size: "40", qty: 1 }]);
     expect(formatInstructionDateTime(r.data.positioningAt)).toBe("13/NOV/2026 13:00H");
-    expect(formatInstructionDate(r.data.cyCutoffAt)).toBe("13/NOV/2026");
+    expect(formatInstructionDate(r.data.cyCutoffAt)).toBe("15/NOV/2026");
     expect(r.data.portOfLoading).toBe("MICP/NORTH");
-    expect(r.data.grossWeightKg).toBeNull(); // LCL-only, cleared for FCL
+    expect(r.data.grossWeightKg).toBe(1200); // FCL and LCL
+    expect(r.data.cbm).toBeNull(); // LCL-only, cleared for FCL
     expect(r.data.pickupRemarks).toBe("Genset needed");
   });
 
@@ -88,17 +89,92 @@ describe("commodity, freight terms, Incoterms, vessel", () => {
 });
 
 describe("required for FCL", () => {
-  it("needs positioning and port of loading on new FCL shipments only", () => {
+  it("needs positioning, port of loading and cut-off on new FCL shipments only", () => {
     const missing = parseShipmentForm(form({}), { requireInstruction: true });
-    expect(!missing.ok && missing.fieldErrors).toMatchObject({ positioningAt: expect.any(String), portOfLoading: expect.any(String) });
-    expect(parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", portOfLoading: "SUBIC" }), { requireInstruction: true }).ok).toBe(true);
+    expect(!missing.ok && missing.fieldErrors).toMatchObject({ positioningAt: expect.any(String), portOfLoading: expect.any(String), cyCutoffAt: expect.any(String) });
+    expect(parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", portOfLoading: "SUBIC", cyCutoffAt: "2026-11-15" }), { requireInstruction: true }).ok).toBe(true);
     expect(parseShipmentForm(form({ cargoType: "LCL", lclQty: "2", lclUnit: "BOX" }), { requireInstruction: true }).ok).toBe(true);
     expect(parseShipmentForm(form({})).ok).toBe(true); // not required unless asked (e.g. after pick-up)
   });
 
   it("lists the required fields together with other errors", () => {
     const r = parseShipmentForm(form({ shipperId: "" }), { requireInstruction: true });
-    expect(!r.ok && Object.keys(r.fieldErrors).sort()).toEqual(["portOfLoading", "positioningAt", "shipperId"]);
+    expect(!r.ok && Object.keys(r.fieldErrors).sort()).toEqual(["cyCutoffAt", "portOfLoading", "positioningAt", "shipperId"]);
+  });
+});
+
+describe("several positioning dates, cut-off, arrangement, COO", () => {
+  it("keeps every positioning date in time order, earliest in positioningAt", () => {
+    const r = parseShipmentForm(form({
+      positioningAt: "2026-11-14T08:00",
+      morePositioningAt: JSON.stringify(["2026-11-13T13:00", "", "2026-11-14T15:00"]),
+      cyCutoffAt: "2026-11-16",
+    }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(formatInstructionDateTime(r.data.positioningAt)).toBe("13/NOV/2026 13:00H");
+    expect(r.data.morePositioningAt.map((iso) => formatInstructionDateTime(new Date(iso)))).toEqual(["14/NOV/2026 08:00H", "14/NOV/2026 15:00H"]);
+  });
+
+  it("rejects a cut-off on the same day as any positioning date", () => {
+    const r = parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", morePositioningAt: JSON.stringify(["2026-11-15T07:00"]), cyCutoffAt: "2026-11-15" }));
+    expect(!r.ok && r.fieldErrors.cyCutoffAt).toBe("Cut-off cannot be on the same day as a positioning date (15/NOV/2026)");
+    expect(parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", cyCutoffAt: "2026-11-13" })).ok).toBe(false);
+  });
+
+  it("rejects the same positioning twice, and extra dates without the first one", () => {
+    const dup = parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", morePositioningAt: JSON.stringify(["2026-11-13T13:00"]) }));
+    expect(!dup.ok && dup.fieldErrors.morePositioningAt).toBeTruthy();
+    const noFirst = parseShipmentForm(form({ morePositioningAt: JSON.stringify(["2026-11-13T13:00"]) }));
+    expect(!noFirst.ok && noFirst.fieldErrors.positioningAt).toBeTruthy();
+  });
+
+  it("drops positioning dates for LCL", () => {
+    const r = parseShipmentForm(form({ cargoType: "LCL", lclQty: "2", lclUnit: "BOX", morePositioningAt: JSON.stringify(["2026-11-13T13:00"]) }));
+    expect(r.ok && r.data.morePositioningAt).toEqual([]);
+  });
+
+  it("reads the arrangement and the COO tick, defaulting to pick-up by NNR and no COO", () => {
+    const d = parseShipmentForm(form({}));
+    expect(d.ok && d.data).toMatchObject({ cargoArrangement: "NNR_PICKUP", hasCoo: false });
+    const c = parseShipmentForm(form({ cargoArrangement: "CONSIGNEE_DELIVERY", hasCoo: "on" }));
+    expect(c.ok && c.data).toMatchObject({ cargoArrangement: "CONSIGNEE_DELIVERY", hasCoo: true });
+    expect(parseShipmentForm(form({ cargoArrangement: "TELEPORT" })).ok).toBe(false);
+  });
+
+  it("puts the arrangement, every positioning date, gross weight and COO on the instruction", async () => {
+    const s = await createShipment(prisma, input({
+      shipperId: f.shipper.id, assignedCsId: f.cs.id, hasCoo: true, grossWeightKg: 18500,
+      positioningAt: fromManila(2026, 11, 13, 13, 0), morePositioningAt: [fromManila(2026, 11, 14, 8, 0).toISOString()],
+      cyCutoffAt: fromManila(2026, 11, 16),
+    }), cs, { now });
+    const full = await prisma.shipment.findUniqueOrThrow({ where: { id: s.id }, include: { shipper: true } });
+    const rows = Object.fromEntries(instructionRows(full));
+    expect(rows).toMatchObject({
+      "Cargo Arrangement": "Pick-up by NNR",
+      "Positioning Date and Time 1": "13/NOV/2026 13:00H",
+      "Positioning Date and Time 2": "14/NOV/2026 08:00H",
+      "Cut-off Time": "16/NOV/2026",
+      GW: "18,500 KGS",
+      "Certificate of Origin (COO)": "YES",
+    });
+    const plain = await createShipment(prisma, input({ shipperId: f.shipper.id, assignedCsId: f.cs.id }), cs, { now });
+    const plainFull = await prisma.shipment.findUniqueOrThrow({ where: { id: plain.id }, include: { shipper: true } });
+    expect(instructionRows(plainFull).map(([k]) => k)).not.toContain("Certificate of Origin (COO)");
+  });
+
+  it("does not email transport when the consignee delivers", async () => {
+    await setTransportEmails(prisma, ["dispatch@truck.test"]);
+    const s = await createShipment(prisma, input({ shipperId: f.shipper.id, assignedCsId: f.cs.id, cargoArrangement: "CONSIGNEE_DELIVERY" }), cs, { now });
+    expect(await sendPickupInstruction(prisma, s.id, f.cs.id, now)).toEqual({ status: "not_needed" });
+    const after = await prisma.shipment.findUniqueOrThrow({ where: { id: s.id } });
+    expect(after.pickupInstructionSentAt).toBeNull();
+    expect(await prisma.milestoneEvent.count({ where: { shipmentId: s.id, type: { in: ["PICKUP_INSTRUCTION_SENT", "PICKUP_INSTRUCTION_FAILED"] } } })).toBe(0);
+  });
+
+  it("treats a change of arrangement or COO as an instruction change", async () => {
+    const s = await createShipment(prisma, input({ shipperId: f.shipper.id, assignedCsId: f.cs.id }), cs, { now });
+    expect(instructionChanges(s, { ...s, cargoArrangement: "CONSIGNEE_DELIVERY", hasCoo: true })).toEqual(["cargoArrangement", "hasCoo"]);
   });
 });
 

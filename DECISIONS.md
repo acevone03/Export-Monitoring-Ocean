@@ -463,7 +463,8 @@ real data are **not** in the repository; tests use invented rows under the real 
    booking number *is* the HBL No.: it is required, may only contain letters, digits and dashes, and must not already be
    another shipment's HBL. Changing the booking number of a Direct shipment changes its HBL (logged as an HBL change).
    Switching Direct → NNR issues a new NNR number; NNR numbers are never reused. Spreadsheet rows marked DIRECT BL are Direct.
-2. **Cut-off = positioning date** (FCL). It is no longer typed in; it follows the positioning date automatically.
+2. ~~**Cut-off = positioning date** (FCL). It is no longer typed in; it follows the positioning date automatically.~~
+   Replaced 20-Oct-2026: the cut-off is typed in again and must **not** be on a positioning date (see below).
 3. **ETD and ETA are dates only**, stored as 00:00 Manila. A date-only due counts as on time until the end of that day.
    ETA may be on the ETD date, not before it. Excel shows these as dd-mmm-yyyy.
 4. **New milestones**: 11. E-track paid, 12. Shipping line paid, 13. Billing invoice to customer (with optional invoice no.).
@@ -523,3 +524,26 @@ other spellings, or a `{ref}` link when a carrier supports one. Only https links
 Open items (not yet done) due **today** are highlighted **red** and due **tomorrow** **orange** (Manila days) in the
 overdue, pick-ups, cut-offs and pending sections, on the page, in the Excel download, and marked [DUE TODAY] /
 [DUE TOMORROW] in the email. Departed, payments and missing-data rows are not highlighted (their dates are not due dates).
+
+## Pick-up or consignee delivery, several positioning dates, COO, gross weight (20-Oct-2026)
+
+1. **Cargo arrangement** on every shipment (`cargoArrangement`): **Pick-up by NNR** (default) or **Delivered by
+   consignee**. It is the first line of the instruction and ticks NNR PICK-UP / SHIPPER'S DELIVERY on the booking sheet
+   (until now that tick was guessed from whether a requested pick-up was entered). When the consignee delivers, the
+   instruction is **not emailed to transport**: on create, on edits, and from "Send to transport" (hidden for these
+   shipments). `sendPickupInstruction` returns `not_needed`. If an instruction was already emailed before the switch, the
+   shipment page reminds CS to tell transport the pick-up is off; nothing is emailed automatically.
+2. **Several positioning dates** (FCL): the form starts with one box and "+ Add positioning date" adds more. The earliest
+   stays in `positioningAt` (board, reports, booking sheet header use it unchanged); the others are kept, in time order,
+   in `morePositioningAt` (JSON list of ISO times). The instruction lists them as "Positioning Date and Time 1, 2, …".
+   The same date and time twice is rejected.
+3. **Cut-off is entered again** (FCL, date only) and **must not be on the same Manila day as any positioning date**.
+   It is required wherever positioning is required (new shipments, email intake, edits before pick-up). Shipments saved
+   before this change have cut-off = positioning day, so CS must pick a new cut-off the next time they edit one before pick-up.
+4. **Certificate of Origin**: a tick box (`hasCoo`, FCL and LCL). When ticked, "Certificate of Origin (COO): YES" is on the
+   instruction and in the booking sheet handling notes; when not ticked the line is left out.
+5. **Gross weight** (`grossWeightKg`) now applies to FCL too (it was LCL only) and is on the instruction as GW and on the
+   booking sheet.
+6. Changing the arrangement, positioning dates, cut-off, gross weight or COO before pick-up resends the REVISED instruction
+   (unless the consignee delivers).
+

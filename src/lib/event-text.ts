@@ -11,11 +11,14 @@ const FIELD_LABEL: Record<string, string> = {
   carrierBookingRef: "Booking no.", carrierRemarks: "Remarks", assignedCsId: "Assigned CS",
   arrastreCutoffAt: "Arrastre cut-off", podCode: "HBL destination code", declarationBy: "Declaration c/o",
   declarationForwarder: "Declaration via forwarder", partOfHblNo: "Part of HBL",
+  cargoArrangement: "Cargo arrangement", hasCoo: "COO", morePositioningAt: "More positioning dates",
   positioningAt: "Positioning", containerYard: "Container yard", portOfLoading: "Port of loading", cyCutoffAt: "Cut-off",
   consolidator: "Consol", grossWeightKg: "GW (kg)", cbm: "CBM", cargoDescription: "Commodity",
   vesselName: "Vessel", voyageNo: "Voyage", freightTerms: "Freight", incoterm: "Incoterms",
   cargoDimensions: "Cargo dimension", deliveryWarehouse: "Delivery warehouse", pickupRemarks: "Pick-up remarks",
 };
+
+const ARRANGEMENT_TEXT: Record<string, string> = { NNR_PICKUP: "Pick-up by NNR", CONSIGNEE_DELIVERY: "Delivered by consignee" };
 
 /** Fields that hold a date only: shown without the 00:00. */
 const DATE_ONLY = new Set(["etdMnl", "eta", "cyCutoffAt"]);
@@ -26,7 +29,9 @@ const show = (v: unknown) => {
   const s = typeof v === "string" ? v : String(v);
   try {
     const parsed = JSON.parse(s);
-    if (typeof parsed === "string") return when(parsed);
+    if (typeof parsed === "string") return ARRANGEMENT_TEXT[parsed] ?? when(parsed);
+    if (typeof parsed === "boolean") return parsed ? "Yes" : "No";
+    if (Array.isArray(parsed) && parsed.length && parsed.every((x) => typeof x === "string")) return parsed.map(when).join(", ");
     if (Array.isArray(parsed)) return containerPlanText(parsed, ", ");
   } catch {}
   return when(s);

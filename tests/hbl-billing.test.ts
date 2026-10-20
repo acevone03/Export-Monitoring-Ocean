@@ -62,12 +62,12 @@ describe("HBL: NNR consolidation or Direct", () => {
 });
 
 describe("dates", () => {
-  it("cut-off is the positioning date, ETD/ETA are dates only", () => {
+  it("keeps the entered cut-off date; ETD/ETA are dates only", () => {
     const r = parseShipmentForm(form({ positioningAt: "2026-11-13T13:00", cyCutoffAt: "2026-11-20", etdMnl: "2026-11-15", eta: "2026-12-01" }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(formatInstructionDate(r.data.cyCutoffAt)).toBe("13/NOV/2026"); // typed value ignored
-    expect(toManilaInput(r.data.cyCutoffAt)).toBe("2026-11-13T00:00");
+    expect(formatInstructionDate(r.data.cyCutoffAt)).toBe("20/NOV/2026");
+    expect(toManilaInput(r.data.cyCutoffAt)).toBe("2026-11-20T00:00");
     expect(toManilaInput(r.data.etdMnl)).toBe("2026-11-15T00:00");
     expect(toManilaInput(r.data.eta)).toBe("2026-12-01T00:00");
   });

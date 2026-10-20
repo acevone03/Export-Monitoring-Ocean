@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseManilaInput, startOfManilaDay } from "./time";
+import { formatInstructionDate, parseManilaInput, startOfManilaDay } from "./time";
 import { podCodeFor, POD_CODE_RE } from "./pod-codes";
 import { CONTAINER_SIZES, FREIGHT_TERMS, INCOTERMS, PORTS_OF_LOADING, type ContainerPlan } from "./containers";
 
@@ -57,6 +57,34 @@ const instrNumber = (label: string, max: number) =>
     .transform((v) => (v ? Number(v.replace(/,/g, "")) : null))
     .pipe(z.number(`${label} must be a number`).min(0, `${label} cannot be negative`).max(max).nullable());
 
+/** Extra positioning boxes, sent by the form as a JSON list of datetime-local strings. Blanks are dropped. */
+const morePositioning = z.string().optional().transform((v, ctx) => {
+  if (!v) return [] as Date[];
+  let list: unknown;
+  try {
+    list = JSON.parse(v);
+  } catch {
+    list = null;
+  }
+  if (!Array.isArray(list) || list.some((x) => typeof x !== "string")) {
+    ctx.addIssue({ code: "custom", message: "Invalid positioning dates" });
+    return z.NEVER;
+  }
+  const filled = (list as string[]).map((x) => x.trim()).filter(Boolean);
+  if (filled.length > 50) {
+    ctx.addIssue({ code: "custom", message: "Up to 50 positioning dates" });
+    return z.NEVER;
+  }
+  const dates = filled.map(parseManilaInput);
+  if (dates.some((d) => !d)) {
+    ctx.addIssue({ code: "custom", message: "One of the positioning dates is not a valid date and time" });
+    return z.NEVER;
+  }
+  return dates as Date[];
+});
+
+const sameManilaDay = (a: Date, b: Date) => startOfManilaDay(a).getTime() === startOfManilaDay(b).getTime();
+
 const ContainerPlanSchema = z.array(
   z.object({
     size: z.enum(CONTAINER_SIZES),
@@ -112,8 +140,14 @@ export const ShipmentInputSchema = z
     declarationBy: z.string().transform((v) => v || "NNR").pipe(z.enum(["NNR", "SHIPPER"])),
     declarationForwarder: optText(100),
     partOfHblNo: z.string().trim().toUpperCase().max(30).transform((v) => v || null),
+    // NNR picks the cargo up (instruction emailed to transport) or the consignee delivers it. Optional key: older callers mean NNR.
+    cargoArrangement: z.string().optional().transform((v) => v || "NNR_PICKUP")
+      .pipe(z.enum(["NNR_PICKUP", "CONSIGNEE_DELIVERY"], "Choose pick-up by NNR or delivered by consignee")),
+    // Certificate of Origin: a ticked checkbox sends "on".
+    hasCoo: z.string().optional().transform((v) => v === "on" || v === "true" || v === "1"),
     // Pick-up instruction: FCL
     positioningAt: instrDateTime,
+    morePositioningAt: morePositioning,
     containerYard: instrText(200),
     portOfLoading: z.string().optional().transform((v) => v || null).pipe(z.enum(PORTS_OF_LOADING, "Pick a port of loading from the list").nullable()),
     cyCutoffAt: instrDate,
@@ -142,6 +176,25 @@ export const ShipmentInputSchema = z
         ctx.addIssue({ code: "custom", path: ["containerPlan"], message: "List each container size once" });
       }
     }
+    if (v.cargoType === "FCL") {
+      if (v.morePositioningAt.length > 0 && !v.positioningAt) {
+        ctx.addIssue({ code: "custom", path: ["positioningAt"], message: "Fill in the first positioning date before adding more" });
+      }
+      const all = [v.positioningAt, ...v.morePositioningAt].filter((d): d is Date => !!d);
+      const times = all.map((d) => d.getTime());
+      if (new Set(times).size !== times.length) {
+        ctx.addIssue({ code: "custom", path: ["morePositioningAt"], message: "The same positioning date and time is entered twice" });
+      }
+      // Cut-off and positioning must be on different days (NNR, 20-Oct-2026).
+      const clash = v.cyCutoffAt ? all.find((d) => sameManilaDay(d, v.cyCutoffAt!)) : undefined;
+      if (clash) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cyCutoffAt"],
+          message: `Cut-off cannot be on the same day as a positioning date (${formatInstructionDate(clash)})`,
+        });
+      }
+    }
     if (v.cargoType === "LCL" && (!v.lclQty || !v.lclUnit)) {
       ctx.addIssue({ code: "custom", path: ["lclQty"], message: "Enter LCL quantity and unit" });
     }
@@ -164,11 +217,20 @@ export const ShipmentInputSchema = z
   .transform((v) => {
     // Only NNR HBLs use the destination code; a Direct BL keeps it if known, for reference.
     const podCode: string | null = v.podCode || podCodeFor(v.pod) || podCodeFor(v.destinationPort) || null;
-    // FCL cut-off is the positioning date (NNR, 19-Oct-2026), so it is never entered separately.
-    const cyCutoffAt = v.positioningAt ? startOfManilaDay(v.positioningAt) : null;
-    return v.cargoType === "FCL"
-      ? { ...v, podCode, cyCutoffAt, lclQty: null, lclUnit: null, consolidator: null, grossWeightKg: null, cbm: null, cargoDimensions: null, deliveryWarehouse: null }
-      : { ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, containerYard: null, portOfLoading: null, cyCutoffAt: null };
+    // FCL cut-off is entered by CS and must not share a day with any positioning date (NNR, 20-Oct-2026;
+    // until then it was copied from the positioning date). Positioning dates are kept in time order:
+    // the earliest in positioningAt (board, booking sheet), the rest in morePositioningAt.
+    if (v.cargoType === "FCL") {
+      const all = [v.positioningAt, ...v.morePositioningAt].filter((d): d is Date => !!d).sort((a, b) => a.getTime() - b.getTime());
+      return {
+        ...v, podCode, positioningAt: all[0] ?? null, morePositioningAt: all.slice(1).map((d) => d.toISOString()),
+        lclQty: null, lclUnit: null, consolidator: null, cbm: null, cargoDimensions: null, deliveryWarehouse: null,
+      };
+    }
+    return {
+      ...v, podCode, containerPlan: [] as ContainerPlan, positioningAt: null, morePositioningAt: [] as string[],
+      containerYard: null, portOfLoading: null, cyCutoffAt: null,
+    };
   });
 
 export type ShipmentInput = z.output<typeof ShipmentInputSchema>;
@@ -199,7 +261,10 @@ export const SHIPMENT_FORM_KEYS = [
   "declarationBy",
   "declarationForwarder",
   "partOfHblNo",
+  "cargoArrangement",
+  "hasCoo",
   "positioningAt",
+  "morePositioningAt",
   "containerYard",
   "portOfLoading",
   "cyCutoffAt",
@@ -227,6 +292,7 @@ export function missingInstructionFields(d: ShipmentInput): FieldErrors {
   if (d.cargoType === "FCL") {
     if (!d.positioningAt) e.positioningAt = "Positioning date and time is required for FCL";
     if (!d.portOfLoading) e.portOfLoading = "Port of loading is required for FCL";
+    if (!d.cyCutoffAt) e.cyCutoffAt = "Cut-off date is required for FCL";
   }
   return e;
 }
@@ -251,6 +317,7 @@ export function parseShipmentForm(
   if (opts.requireInstruction && raw.cargoType === "FCL") {
     if (!raw.positioningAt.trim()) fieldErrors.positioningAt ??= "Positioning date and time is required for FCL";
     if (!raw.portOfLoading.trim()) fieldErrors.portOfLoading ??= "Port of loading is required for FCL";
+    if (!raw.cyCutoffAt.trim()) fieldErrors.cyCutoffAt ??= "Cut-off date is required for FCL";
   }
   return { ok: false, fieldErrors };
 }

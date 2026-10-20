@@ -2,10 +2,14 @@ import type { PrismaClient, Shipment, Shipper } from "@prisma/client";
 import { sendMail } from "./mailer";
 import { EVENT } from "./milestones";
 import { containerPlanText } from "./containers";
+import { positioningDates } from "./positioning";
 import { formatInstructionDate, formatInstructionDateTime } from "./time";
+
+export { positioningDates };
 
 // Pick-up instruction: the booking details the transport (trucking) company needs, emailed to the
 // saved transport addresses when a shipment is created, and again on demand from the shipment page.
+// When the consignee delivers the cargo themselves, nothing is emailed (status "not_needed").
 
 export const TRANSPORT_EMAILS_KEY = "TRANSPORT_EMAILS";
 const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
@@ -38,10 +42,20 @@ const qtyText = (s: Shipment) =>
   s.lclQty ? `${s.lclQty} ${s.lclUnit === "BOX" ? (s.lclQty === 1 ? "BOX" : "BOXES") : s.lclQty === 1 ? "PALLET" : "PALLETS"}` : "";
 const num = (n: number | null | undefined, unit: string) => (n === null || n === undefined ? "" : `${n.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${unit}`);
 
+export const ARRANGEMENT_LABEL = { NNR_PICKUP: "Pick-up by NNR", CONSIGNEE_DELIVERY: "Delivered by consignee" } as const;
+
+/** One row per positioning date; numbered when there is more than one. Blank row when none. */
+function positioningRows(s: Shipment): Array<[string, string]> {
+  const all = positioningDates(s);
+  if (all.length <= 1) return [["Positioning Date and Time", formatInstructionDateTime(all[0] ?? null)]];
+  return all.map((d, i) => [`Positioning Date and Time ${i + 1}`, formatInstructionDateTime(d)]);
+}
+
 /** Label/value rows in the order the transport company reads them. Blank values are kept so gaps are visible. */
 export function instructionRows(s: ShipmentWithShipper): Array<[string, string]> {
   const contact = [s.shipper.contactPerson, s.shipper.phone].filter(Boolean).join(" · ");
   const head: Array<[string, string]> = [
+    ["Cargo Arrangement", ARRANGEMENT_LABEL[s.cargoArrangement]],
     ["Shipper", `${s.shipper.code} · ${s.shipper.name}`],
     ["Pick-up address", s.pickupAddress ?? s.shipper.defaultPickupAddress ?? ""],
     ["Contact", contact],
@@ -53,11 +67,12 @@ export function instructionRows(s: ShipmentWithShipper): Array<[string, string]>
   const body: Array<[string, string]> =
     s.cargoType === "FCL"
       ? [
-          ["Positioning Date and Time", formatInstructionDateTime(s.positioningAt)],
+          ...positioningRows(s),
           ["Container Yard", s.containerYard ?? ""],
           ["Container Size", containerPlanText(s.containerPlan as Array<{ size: string; qty: number }> | null)],
           ["Port of Loading", s.portOfLoading ?? ""],
           ["Cut-off Time", formatInstructionDate(s.cyCutoffAt)],
+          ["GW", num(s.grossWeightKg, "KGS")],
         ]
       : [
           ["Consol", s.consolidator ?? ""],
@@ -67,7 +82,9 @@ export function instructionRows(s: ShipmentWithShipper): Array<[string, string]>
           ["Cargo Dimension", s.cargoDimensions ?? ""],
           ["Delivery Warehouse", s.deliveryWarehouse ?? ""],
         ];
-  return [...head, ...body, ["Destination", s.pod || s.destinationPort], ["Remarks", s.pickupRemarks ?? ""]];
+  // COO is listed only when the shipment has one.
+  const coo: Array<[string, string]> = s.hasCoo ? [["Certificate of Origin (COO)", "YES"]] : [];
+  return [...head, ...body, ...coo, ["Destination", s.pod || s.destinationPort], ["Remarks", s.pickupRemarks ?? ""]];
 }
 
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -118,6 +135,7 @@ ${rows.map(([k, v]) => `<tr><td style="border:1px solid #cbd5e1;background:#f1f5
 
 export type InstructionResult =
   | { status: "sent"; to: string[] }
+  | { status: "not_needed" } // delivered by consignee: transport is not involved
   | { status: "no_recipients" }
   | { status: "failed"; to: string[]; error: string };
 
@@ -133,6 +151,7 @@ export async function sendPickupInstruction(
     where: { id: shipmentId },
     include: { shipper: { select: { code: true, name: true, contactPerson: true, phone: true, defaultPickupAddress: true } } },
   });
+  if (s.cargoArrangement === "CONSIGNEE_DELIVERY") return { status: "not_needed" };
   const to = await getTransportEmails(db);
   if (to.length === 0) return { status: "no_recipients" };
   // Only call it "revised" if an earlier one actually went out.
@@ -158,9 +177,9 @@ export async function sendPickupInstruction(
 
 // Fields that appear on the instruction. When an edit changes any of them, the instruction is resent.
 const INSTRUCTION_FIELDS = [
-  "shipperId", "pickupAddress", "requestedPickupAt", "carrierBookingRef", "hblNo", "cargoType", "containerPlan", "lclQty", "lclUnit",
-  "pod", "destinationPort", "positioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
-  "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks",
+  "cargoArrangement", "shipperId", "pickupAddress", "requestedPickupAt", "carrierBookingRef", "hblNo", "cargoType", "containerPlan", "lclQty", "lclUnit",
+  "pod", "destinationPort", "positioningAt", "morePositioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
+  "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks", "hasCoo",
 ] as const satisfies ReadonlyArray<keyof Shipment>;
 
 const same = (a: unknown, b: unknown) =>

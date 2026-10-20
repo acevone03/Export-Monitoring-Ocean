@@ -32,8 +32,12 @@ function derive(s: Shipment, rules: RuleLike[], now: Date) {
 }
 
 function inputToData(input: ShipmentInput) {
-  const { containerPlan, ...rest } = input;
-  return { ...rest, containerPlan: containerPlan.length ? containerPlan : Prisma.DbNull };
+  const { containerPlan, morePositioningAt, ...rest } = input;
+  return {
+    ...rest,
+    containerPlan: containerPlan.length ? containerPlan : Prisma.DbNull,
+    morePositioningAt: morePositioningAt.length ? morePositioningAt : Prisma.DbNull,
+  };
 }
 
 async function assertAssignable(tx: Tx, shipperId: string, assignedCsId: string) {
@@ -99,7 +103,7 @@ const EDITABLE: Array<keyof ShipmentInput> = [
   "carrierName", "carrierBookingRef", "carrierRemarks", "assignedCsId",
   "arrastreCutoffAt", "podCode", "declarationBy", "declarationForwarder", "partOfHblNo", "hblType",
   // Pick-up instruction
-  "positioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
+  "cargoArrangement", "hasCoo", "positioningAt", "morePositioningAt", "containerYard", "portOfLoading", "cyCutoffAt", "consolidator", "grossWeightKg", "cbm",
   "cargoDescription", "cargoDimensions", "deliveryWarehouse", "pickupRemarks",
   "vesselName", "voyageNo", "freightTerms", "incoterm",
 ];

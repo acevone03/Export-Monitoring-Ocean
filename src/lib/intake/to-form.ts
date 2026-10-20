@@ -104,7 +104,7 @@ export function extractionToForm(
       declarationBy: "NNR",
       declarationForwarder: "",
       partOfHblNo: "",
-      positioningAt: "", containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
+      cargoArrangement: "NNR_PICKUP", hasCoo: false, positioningAt: "", morePositioningAt: [], containerYard: "", portOfLoading: "", cyCutoffAt: "", consolidator: "", grossWeightKg: "", cbm: "",
       cargoDescription: "", cargoDimensions: "", deliveryWarehouse: "", pickupRemarks: "",
       vesselName: "", voyageNo: "", freightTerms: "", incoterm: "",
     },
